@@ -314,8 +314,8 @@ function calc(eq){
     for(const a of it.aff)t[a.k]+=AFF[a.k].flat?a.v*m:a.v;
     if(it.leg)legs.add(it.leg);}
   const c={legs};
-  c.hp=(50+S.lvl*10+t.hp)*(1+t.hpPct/100);if(legs.has('giant'))c.hp*=1.3;
-  c.atk=(5+S.lvl*1.5+t.atk)*(1+t.atkPct/100);if(legs.has('giant'))c.atk+=c.hp*0.03;
+  c.hp=(80+S.lvl*4+t.hp)*(1+t.hpPct/100);if(legs.has('giant'))c.hp*=1.3;
+  c.atk=(5+S.lvl*0.5+t.atk)*(1+t.atkPct/100);if(legs.has('giant'))c.atk+=c.hp*0.03;
   c.armor=t.armor*(1+t.armorPct/100);
   c.aspd=Math.min(5,1+t.aspd/100);
   c.crit=Math.min(75,t.crit);c.critDmg=t.critDmg;
