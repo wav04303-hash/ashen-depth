@@ -16,7 +16,7 @@
 - 수치 기준: 스테이지 배율 `sc(st)=1.1^(st-1)`. 몬스터 생명력 30×, 공격력 3×, 보스 생명력 320×. 방어 피해 감소 = 방어도/(방어도+40×배율), 최대 80%.
 - 영웅 기본치: 생명력 80+레벨×4, 공격력 5+레벨×0.5 (v0.2).
 - 등급(`rarity`): 0 일반, 1 마법, 2 희귀, 3 전설, 4 세트(v0.3). 비용 계산은 `rk(it)`로 세트를 2.5등급으로 친다.
-- 세트(v0.4, 6종): guard 파수꾼(평원·생존), rot 썩은 뿌리(숲·흡혈), blade 칼날(묘지·치명타), magma 용암 심장(용암·광역), frost 서리 망령(첨탑·스킬), hunter 사냥꾼(공허·보스). `SETS`(부위·2/4세트 효과), `SET_BY_REGION`(지역마다 하나), `SET_COL`(오라·도감 색), `SET_RATE`(희귀→세트 전환 확률). 드롭은 `rollDrop()`, 세트 효과는 `calc()`에서 `setCounts()`로 적용. 확률·발동형 효과(`dmgTaken`, `reflect`, `critHeal`, `cdReset`, `bossTime`, `bossReset`, v0.4의 `leechMult`(흡수와 한 번 흡수 상한에 곱), `killHeal`(`kill()`), `blast`(평타 뒤 화염 폭발 확률))는 `calc()` 결과에 실려 `step()`에서 쓰인다.
+- 세트(v0.4, 6종): guard 파수꾼(평원·생존), rot 썩은 뿌리(숲·흡혈), blade 칼날(묘지·치명타), magma 용암 심장(용암·광역), frost 서리 망령(첨탑·스킬), hunter 사냥꾼(공허·보스). `SETS`(부위·2/4세트 효과), `SET_BY_REGION`(지역마다 하나), `SET_COL`(오라·도감 색), `SET_RATE`(희귀→세트 전환 확률). 드롭은 `rollDrop()`, 세트 효과는 `calc()`에서 `setCounts()`로 적용. 확률·발동형 효과(`dmgTaken`, `reflect`, `critHeal`, `cdReset`, `bossTime`, `bossReset`, v0.4의 `leechMult`(생명력 흡수에 곱), `killHeal`(`kill()`), `blast`(평타 뒤 화염 폭발 확률))는 `calc()` 결과에 실려 `step()`에서 쓰인다.
 
 - 편의(v0.4): `S.autoEquip`/`tryAutoEquip()`(5% 넘게 강하면 장착), `S.setSeen`/`markSeen()`(세트 도감), `RT.invF`(가방 필터: all·up·set·부위), `countUp()`→`RT.upCount`(장비 탭 ▲ 개수). 그래픽 입자는 `partSprite()`로 미리 그려 쓰고, `MOBILE`이면 입자 60%.
 
