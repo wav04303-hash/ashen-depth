@@ -18,7 +18,9 @@
 - 등급(`rarity`): 0 일반, 1 마법, 2 희귀, 3 전설, 4 세트(v0.3). 비용 계산은 `rk(it)`로 세트를 2.5등급으로 친다.
 - 세트(v0.4, 6종): guard 파수꾼(평원·생존), rot 썩은 뿌리(숲·흡혈), blade 칼날(묘지·치명타), magma 용암 심장(용암·광역), frost 서리 망령(첨탑·스킬), hunter 사냥꾼(공허·보스). `SETS`(부위·2/4세트 효과), `SET_BY_REGION`(지역마다 하나), `SET_COL`(오라·도감 색), `SET_RATE`(희귀→세트 전환 확률). 드롭은 `rollDrop()`, 세트 효과는 `calc()`에서 `setCounts()`로 적용. 확률·발동형 효과(`dmgTaken`, `reflect`, `critHeal`, `cdReset`, `bossTime`, `bossReset`, v0.4의 `leechMult`(생명력 흡수에 곱), `killHeal`(`kill()`), `blast`(평타 뒤 화염 폭발 확률))는 `calc()` 결과에 실려 `step()`에서 쓰인다.
 
-- 편의(v0.4): `S.autoEquip`/`tryAutoEquip()`(5% 넘게 강하면 장착), `S.setSeen`/`markSeen()`(세트 도감), `RT.invF`(가방 필터: all·up·set·부위), `countUp()`→`RT.upCount`(장비 탭 ▲ 개수). 그래픽 입자는 `partSprite()`로 미리 그려 쓰고, `MOBILE`이면 입자 60%.
+- 편의(v0.4): `S.autoEquip`/`tryAutoEquip()`(5% 넘게 강하면 장착), `S.setSeen`/`markSeen()`(세트 도감), `RT.invF`(가방 필터: all·up·set·부위), `countUp()`→`RT.upCount`(장비 탭 ▲ 개수). 
+
+- 그래픽(v0.4.1, 도트): `draw()`가 저해상도 캔버스 `LO`(화면/`PX`=3)에 그리고 키워 붙인다. 스프라이트는 문자열 격자(`HERO_BODY`, `SWORD`, `MON[]`, `DECO`)를 `bake()`로 한 번 구워 `SPRC`에 캐시(테두리·명암 자동). 영웅 동작은 `HERO_POSES`, 적은 `monSprite(지역, 보스, 프레임, 흰색, 공격)`. 이펙트는 `RT.fx`의 `k`로 `FXR[k]`가 그리며, 스킬은 `SKILLS[].fx={t,col}` + `skFx()`. 배경은 `bgCache`·`floorCache`·`vigCache`(지역·크기마다 한 번), `MOBILE`이면 입자 60%.
 
 ## 시뮬레이션
 - `node tools/sim.mjs [게임 분=30] [시드 수=3]` — `index.html`의 스크립트를 DOM 없이 불러 `step()`을 직접 돌린다. 장비 없음 / 장비 착용(세트 끔) / 세트 착용 세 경우, 같은 레벨 희귀 대비 세트 효과 크기(정적 수치), 전투 측정(같은 부위 희귀와 바꿔 3분 사냥)을 출력한다.
