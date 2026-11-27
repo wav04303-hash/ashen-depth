@@ -163,3 +163,38 @@ for (const id in G.SETS) {
 }
 }
 function G0ok() { return out.gear && out.gear[0].G.SETS; }
+
+// 전투 측정: 정적 수치에 안 잡히는 효과(흡혈·처치 회복·화염 폭발·반사 등)를 보려고,
+// 장비 착용 경우의 최종 장비로 최고 스테이지에서 3분 사냥(보스 없음)을 돌려 처치 수·사망을 잰다.
+if (G0ok()) {
+  const G = out.gear[0].G, S = G.S, RT = G.RT; let st = S.maxStage;
+  const keep = { lvl: S.lvl, xp: S.xp, gold: S.gold, stage: S.stage, auto: S.autoPush, eq: S.eq };
+  const fight = (eq, sec = 180) => {
+    S.eq = eq; S.stage = st; S.autoPush = false; S.kills = 0; G.recalc();
+    RT.enemies = []; RT.boss = false; RT.wantBoss = false; RT.cds = {}; RT.hero.hp = RT.cs.hp; RT.hero.dead = 0; RT.spawnT = 0.3;
+    const k0 = S.stats.kills, d0 = S.stats.deaths;
+    for (let t = 0; t < sec; t += 0.05) { G.step(0.05); S.kills = 0; }
+    const r = { k: S.stats.kills - k0, d: S.stats.deaths - d0 };
+    Object.assign(S, { lvl: keep.lvl, xp: keep.xp, gold: keep.gold });
+    return r;
+  };
+  // 기준 장비가 버거워하는 스테이지(1분에 60마리 미만이거나 사망)를 찾아 그곳에서 잰다
+  const N = 7;
+  // id: 세트 이름, parts: 바꿀 부위, asSet: false면 같은 부위를 희귀로
+  const mkEq = (id, n, asSet = true) => {
+    const eq = Object.assign({}, keep.eq);
+    for (const part of (id ? G.SETS[id].parts : ['weapon', 'chest', 'gloves', 'boots']).slice(0, n)) {
+      let it; for (let k = 0; k < 500; k++) { it = id && asSet ? G.genItem(st, 4, id) : G.genItem(st, 2); if (it.slot === part) break; }
+      it.enh = eq[part] ? eq[part].enh || 0 : 0; eq[part] = it;
+    }
+    return eq;
+  };
+  for (let tries = 0; tries < 60; tries++) { const r = fight(mkEq(null, 4), 60); if (r.k < 60 || r.d > 0) break; st += 2; }
+  const avgFight = (id, asSet) => { let k = 0, d = 0; for (let i = 0; i < N; i++) { const r = fight(mkEq(id, 4, asSet)); k += r.k; d += r.d; } return { k: k / N, d: d / N }; };
+  console.log(`\n[전투 측정] 기준 장비가 버거워지는 스테이지 ${st}(최고 기록 ${S.maxStage})에서 3분 사냥, 같은 레벨 조각 4개로 갈아입고 ${N}번 평균 (보스 제외)`);
+  for (const id in G.SETS) {
+    const b = avgFight(id, false), r = avgFight(id, true);
+    console.log(`  ${G.SETS[id].n} 4세트: 처치 ${r.k.toFixed(1)} vs 같은 부위 희귀 ${b.k.toFixed(1)} (${((r.k / b.k - 1) * 100).toFixed(0)}%) · 사망 ${r.d.toFixed(1)} vs ${b.d.toFixed(1)}`);
+  }
+  S.eq = keep.eq; S.stage = keep.stage; S.autoPush = keep.auto; G.recalc();
+}
