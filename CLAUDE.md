@@ -18,7 +18,8 @@
 - 등급(`rarity`): 0 일반, 1 마법, 2 희귀, 3 전설, 4 세트(v0.3). 비용 계산은 `rk(it)`로 세트를 2.5등급으로 친다.
 - 세트(v0.4, 6종): guard 파수꾼(평원·생존), rot 썩은 뿌리(숲·흡혈), blade 칼날(묘지·치명타), magma 용암 심장(용암·광역), frost 서리 망령(첨탑·스킬), hunter 사냥꾼(공허·보스). `SETS`(부위·2/4세트 효과), `SET_BY_REGION`(지역마다 하나), `SET_COL`(오라·도감 색), `SET_RATE`(희귀→세트 전환 확률). 드롭은 `rollDrop()`, 세트 효과는 `calc()`에서 `setCounts()`로 적용. 확률·발동형 효과(`dmgTaken`, `reflect`, `critHeal`, `cdReset`, `bossTime`, `bossReset`, v0.4의 `leechMult`(생명력 흡수에 곱), `killHeal`(`kill()`), `blast`(평타 뒤 화염 폭발 확률))는 `calc()` 결과에 실려 `step()`에서 쓰인다.
 
-- 편의(v0.4): `S.autoEquip`/`tryAutoEquip()`(5% 넘게 강하면 장착), `S.setSeen`/`markSeen()`(세트 도감), `RT.invF`(가방 필터: all·up·set·부위), `countUp()`→`RT.upCount`(장비 탭 ▲ 개수). 
+- 편의(v0.4): `S.autoEquip`/`tryAutoEquip()`(5% 넘게 강하면 장착), `S.setSeen`/`markSeen()`(세트 도감), `RT.invF`(가방 필터: all·up·set·부위), `countUp()`→`RT.upCount`(장비 탭 ▲ 개수).
+- 정리 규칙(v0.4.2): `S.sort={on,weak,weakTo,dup,keep[]}`(`sortDefault()`), 판정은 `salvReason(it,{pickup,fresh})`(우선순위: 잠금 > `keep` 옵션 > 도감 새 조각 > dup·weak > 등급별 `S.autoSalv`), 가방 정리는 `sortSweep()`, 30초 주기와 기록 묶음은 `sortTick()`(`step()`에서 호출, `RT.sortT`·`RT.sortAgg`). 테스트: `node tools/tests/sort-rules.mjs`. 
 
 - 그래픽(v0.4.1, 도트): `draw()`가 저해상도 캔버스 `LO`(화면/`PX`=3)에 그리고 키워 붙인다. 스프라이트는 문자열 격자(`HERO_BODY`, `SWORD`, `MON[]`, `DECO`)를 `bake()`로 한 번 구워 `SPRC`에 캐시(테두리·명암 자동). 영웅 동작은 `HERO_POSES`, 적은 `monSprite(지역, 보스, 프레임, 흰색, 공격)`. 이펙트는 `RT.fx`의 `k`로 `FXR[k]`가 그리며, 스킬은 `SKILLS[].fx={t,col}` + `skFx()`. 배경은 `bgCache`·`floorCache`·`vigCache`(지역·크기마다 한 번), `MOBILE`이면 입자 60%.
 
