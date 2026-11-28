@@ -4,6 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>잿빛 심연</title>
+<meta name="theme-color" content="#0d0b0a">
+<meta name="description" content="자동 전투로 장비를 모아 빌드를 짜는 파밍 RPG">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="잿빛 심연">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@700;800&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -147,7 +156,7 @@ textarea{width:100%;height:80px;background:#0c0a08;color:var(--text);border:1px 
 <body>
 <div id="app">
   <header>
-    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.4.2</div></div>
+    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.4.3</div></div>
     <div class="res">
       <div class="lv">Lv <b id="lv">1</b></div>
       <div class="xpbar"><i id="xpf"></i><span id="xpt"></span></div>
@@ -967,6 +976,15 @@ function setDiffHTML(c0,c1){let h='';
     for(const t of [2,4]){if(a<t&&b>=t)notes.push(`<b class="pos">${t}세트 효과 활성</b>`);if(a>=t&&b<t)notes.push(`<b class="neg">${t}세트 효과 해제</b>`);}
     h+=`<div><span class="c4">${SETS[id].n}</span><span>${a}/${N} → ${b}/${N} ${notes.join(' ')}</span></div>`;}
   return h;}
+// 앱 설치(v0.4.3): 크롬이 설치를 허락하면(beforeinstallprompt) 버튼을 보여 줌. 이미 앱으로 켰으면 안내만.
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();installEvt=e;dirty('settings');});
+window.addEventListener('appinstalled',()=>{installEvt=null;toast('앱으로 설치했습니다',1);dirty('settings');});
+const isStandalone=()=>(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+function installHTML(){
+  if(isStandalone())return '<h3>앱</h3><p class="note" style="margin-top:0">앱으로 실행 중입니다. 저장은 이 기기에 남습니다.</p>';
+  return `<h3>앱으로 설치</h3>${installEvt?'<div class="row"><button class="pri" data-act="install">앱으로 설치</button></div>':''}
+    <p class="note" style="margin-top:2px">안드로이드 크롬: 메뉴(⋮) → 「앱 설치」 또는 「홈 화면에 추가」 · 아이폰 사파리: 공유 → 「홈 화면에 추가」. 설치해도 이 브라우저의 저장은 그대로 이어집니다(같은 주소일 때). 기기를 옮길 땐 저장 코드를 쓰세요.</p>`;}
 function sortBoxHTML(){const R=S.sort;
   const opt=i=>`<select data-act="ska" data-i="${i}"><option value="">(없음)</option>${Object.keys(AFF).map(k=>`<option value="${k}" ${R.keep[i]===k?'selected':''}>${AFF[k].n}${AFF[k].flat?' (고정)':' %'}</option>`).join('')}</select>`;
   return `<div class="rules">
@@ -1071,6 +1089,7 @@ function renderPanel(){
       <h3>자동 장착</h3><div class="chk"><label><input type="checkbox" data-act="ae" ${S.autoEquip?'checked':''}> 주운 장비가 지금보다 5% 넘게 강하면 바로 장착</label></div>
       <p class="note" style="margin-top:2px">벗은 장비는 가방으로 갑니다. 세트 효과까지 따져서 비교하지만, 전설 고유 효과는 따지지 않습니다.</p>
       <h3>세트 도감 <span class="r">${dexDone()} / ${dexTotal()} 조각</span></h3><div class="dex">${dexHTML()}</div>
+      ${installHTML()}
       <h3>게임 속도</h3><div class="row speed">${[1,2,3].map(s=>`<button data-act="speed" data-s="${s}" class="${S.speed===s?'on':''}">×${s}</button>`).join('')}</div>
       <h3>저장</h3><p class="note" style="margin-top:0">자동 저장은 이 브라우저에만 남습니다. 기기를 옮기거나 백업하려면 코드를 복사해 두세요.</p>
       <div class="row"><button data-act="export">저장 코드 복사</button><button data-act="import">코드 불러오기</button><button class="danger" data-act="wipe">처음부터 다시</button></div>
@@ -1138,6 +1157,7 @@ function panelAct(act,el){
       if(!best)break;S.inv.splice(S.inv.indexOf(best),1);const old=S.eq[best.slot];S.eq[best.slot]=best;if(old)S.inv.push(old);recalc();n++;}
     if(n)toast(`${n}개 장착`,1);dirty('equip','tabs');}
   else if(act==='sortnow'){sortSweep(true);}
+  else if(act==='install'){if(installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;dirty('settings');});}}
   else if(act==='setdup'){const eqIl={},best={},K=it=>it.set+'/'+it.slot;
     for(const it of Object.values(S.eq))if(it&&it.set)eqIl[K(it)]=it.ilvl;
     for(const it of S.inv)if(it.set&&(!best[K(it)]||it.ilvl>best[K(it)].ilvl))best[K(it)]=it;
@@ -1221,5 +1241,6 @@ if(!had)starterKit();
 else{log('돌아온 것을 환영합니다.');const away=(Date.now()-S.last)/1000;if(away>60)offline(away);}
 requestAnimationFrame(frame);
 </script>
+<script>if("serviceWorker" in navigator&&location.protocol.startsWith("http")){addEventListener("load",()=>{navigator.serviceWorker.register("sw.js").catch(()=>{})})}</script>
 </body>
 </html>
