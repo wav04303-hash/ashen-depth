@@ -37,7 +37,7 @@ function mulberry32(a) {
   };
 }
 
-const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost','BR_LV','SKMAP'];
+const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost','BR_LV','SKMAP','GEMS','GEMMAP','gemOk','sockCount','gemAutoMerge','gemUsedBy'];
 function boot(seed) {
   Math.random = mulberry32(seed);
   const doc = stub();
@@ -72,6 +72,15 @@ function manage(G, mode) {
     S.slots = Array.from({ length: S.slots.length }, (_, i) => pickS[i] || null);
     for (const sk of learned) { if (!sk.br) continue; const ch = S.br[sk.id] || (S.br[sk.id] = []);
       sk.br.forEach((t, i) => { if (S.skills[sk.id] >= G.BR_LV[i] && !ch[i]) ch[i] = t[(sk.id.length + i) % t.length].id; }); }
+  }
+  // 보조 젬 (v0.5.1): 같은 젬 3개는 합치고, 장착 스킬마다 맞는 젬을 우선순위대로 끼움
+  if (G.GEMS && S.gems) {
+    G.gemAutoMerge(); S.sock = {};
+    const order = ['split','focus','widen','chaing','haste','fireconv','coldconv','linger','leechg','boom','shockg'];
+    const pool = S.gems.slice().sort((a, b) => b.r - a.r || order.indexOf(a.g) - order.indexOf(b.g));
+    for (const id of S.slots) { if (!id) continue; const sk = G.SKMAP[id], n = G.sockCount(S.skills[id] || 1), got = [];
+      for (const x of pool) { if (got.length >= n) break; if (G.gemUsedBy(x.u) || got.some(u => S.gems.find(z => z.u === u).g === x.g)) continue;
+        if (G.gemOk(G.GEMMAP[x.g], sk)) { got.push(x.u); S.sock[id] = got; } } }
   }
   // 스킬 레벨업: 장착 스킬 중 가장 싼 것
   for (let k = 0; k < (process.env.NOTAL ? 0 : 20); k++) {

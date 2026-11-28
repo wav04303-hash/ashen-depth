@@ -27,7 +27,8 @@
   - **전설 장비가 스킬을 바꾸는 법**: `LEG_FX[전설id]=[{skill:'whirl'|tag:'aoe'|branch:'pull', k:'hits', add:1}, …]`. `calc()`가 장착 전설의 항목을 `c.legFx`로 모으고 `skP()`가 대상 스킬·태그·갈래에 적용한다. 7-2 보조 젬도 같은 모양으로 붙인다.
   - 시전은 `cast(id)`, 언제 쓸지는 `wantCast(id,P,en)`, 시간 걸리는 효과(지연 폭발 `RT.pend`, 칼날 폭풍 `RT.storm`, 분신 `RT.clones`, 방어 `RT.guard`, 재생 `RT.regenB`, 적 `e.stun`·`e.burn`)는 `tickSkillFx(dt)`. 부가 효과가 붙는 타격은 `hitE(e,피해,P)`(기절·화상·밀침, 실제로 깎은 생명력 반환).
   - 장착 칸 `slotCount()`: 3 / Lv20 4 / Lv40 5 (`MAX_SLOTS`). 갈래 바꾸기 비용 `brCost(단계)`. 보조 스킬은 `sup:1`.
-  - 화력 비교: `node tools/skill-bench.mjs [스킬 레벨=15] [시드=3]` — 공격 스킬·갈래의 최고/최저가 2배 안쪽이 목표.
+  - 보조 젬(v0.5.1): `GEMS[]`=`{id,n,req[태그|'*'],not?,nosup?,util?,fxcol?,d(k),m(k)}`, 등급 `r`(0 일반·1 희귀·2 전설, 세기 `GEM_K=[1,1.5,2.2]`). 보관 `S.gems=[{u,g,r}]`, 끼움 `S.sock[스킬id]=[u,u,u]`(칸 수 `sockCount(L)`: Lv1·10·25), `S.nextGem`. `skP()`가 갈래·전설 뒤에 `gemMods(id)`를 적용(`has:1`은 그 수치가 있는 스킬에만). 공통 효과 `gLeech·gBurn·gSlow·gStun·gBoom·gRepeat`는 `cast()`가 `RT.curP`에 두고 `hitE()`가 읽음(분열은 `RT.recast`). 드롭 `addGem()`(일반 적 1.2%, 보스 40%), 합성 `gemMerge()`/`gemAutoMerge()`(`S.sort.gemMerge`).
+  - 화력 비교: `node tools/skill-bench.mjs [스킬 레벨=15] [시드=3]` — 공격 스킬·갈래, 그리고 스킬+젬 조합의 최고/최저가 2배 안쪽이 목표(`GEMR=0|1|2` 젬 등급, `NOGEM=1` 젬 생략).
 
 ## 시뮬레이션
 - `node tools/sim.mjs [게임 분=30] [시드 수=3]` — `index.html`의 스크립트를 DOM 없이 불러 `step()`을 직접 돌린다. 장비 없음 / 장비 착용(세트 끔) / 세트 착용 세 경우, 같은 레벨 희귀 대비 세트 효과 크기(정적 수치), 전투 측정(같은 부위 희귀와 바꿔 3분 사냥)을 출력한다.

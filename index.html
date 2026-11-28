@@ -129,6 +129,12 @@ select{font:inherit;font-size:12px;color:var(--text);background:var(--panel2);bo
 .bro{text-align:left;padding:4px 6px;display:flex;flex-direction:column;gap:1px}.bro b{font-size:12px;color:#e9ddc7}.bro small{font-size:10.5px;color:var(--dim);line-height:1.3}
 .bro.on{background:#2a2014;border-color:var(--accent)}.bro.on b{color:#ffe3a6}
 .brc{font-size:10px;color:var(--dim)}
+.socks{display:flex;gap:4px;flex-wrap:wrap;align-items:stretch;margin-top:6px}.socks .brlv{width:100%}
+.sock{flex:1;min-width:90px;font-size:11px;padding:3px 6px;text-align:left;display:flex;flex-direction:column;border-style:dashed}
+.sock.on{border-style:solid;background:#151b24;border-color:#3b5f99}.sock.on small{font-size:10px;color:var(--dim);line-height:1.25}.sock.lockd{color:#5d5040;border:1px dashed #3a2f24;border-radius:6px;justify-content:center;align-items:center}
+.gembag{display:flex;flex-direction:column;gap:4px;margin-bottom:6px}.gemrow{display:flex;gap:6px;align-items:center;border:1px solid var(--line);background:#100d0b;border-radius:7px;padding:5px 8px}
+.gemrow .t{flex:1;min-width:0}.gemrow p{margin:1px 0 0;font-size:11.5px;color:var(--dim)}.gbtns{display:flex;flex-direction:column;gap:3px}.gbtns button{font-size:11px;padding:2px 7px}
+.gempick{text-align:left;display:flex;flex-direction:column;gap:1px}.gempick small{color:var(--dim)}
 .slotbtns{display:flex;gap:3px}
 .slotbtns button{padding:3px 8px;font-size:12px}
 .slotbtns button.on{background:#3a2a14;border-color:var(--accent);color:#ffe3a6}
@@ -164,7 +170,7 @@ textarea{width:100%;height:80px;background:#0c0a08;color:var(--text);border:1px 
 <body>
 <div id="app">
   <header>
-    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.5.0</div></div>
+    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.5.1</div></div>
     <div class="res">
       <div class="lv">Lv <b id="lv">1</b></div>
       <div class="xpbar"><i id="xpf"></i><span id="xpt"></span></div>
@@ -457,8 +463,47 @@ function skP(id){const sk=SKMAP[id],L=S.skills[id]||1,P=Object.assign({cd:sk.cd}
   const ch=(S.br&&S.br[id])||[],mods=[];
   (sk.br||[]).forEach((tier,ti)=>{const o=tier.find(x=>x.id===ch[ti]);if(o&&L>=BR_LV[ti]){mods.push(...o.m);if(o.fxcol)P.fxcol=o.fxcol;}});
   const lf=RT.cs&&RT.cs.legFx;if(lf)for(const f of lf)if(f.skill===id||(f.tag&&sk.tags.includes(f.tag))||(f.branch&&ch.includes(f.branch)))mods.push(f);
-  for(const m of mods){if(m.set!==undefined)P[m.k]=m.set;if(m.add)P[m.k]=(P[m.k]||0)+m.add;if(m.mul)P[m.k]=(P[m.k]||0)*m.mul;}
+  if(S.sock)for(const gm of gemMods(id)){mods.push(...gm.mods);if(gm.g.fxcol)P.fxcol=gm.g.fxcol;}
+  for(const m of mods){if(m.has&&P[m.k]===undefined)continue;if(m.set!==undefined)P[m.k]=m.set;if(m.add)P[m.k]=(P[m.k]||0)+m.add;if(m.mul)P[m.k]=(P[m.k]||0)*m.mul;}
   return P;}
+// ---- 보조 젬 (v0.5.1) ----
+// 스킬마다 보조 칸(스킬 레벨 1에 1칸, 10에 2칸, 25에 3칸)에 젬을 끼우면 skP()가 갈래·전설 다음에 젬의 수치 바꾸기를 적용한다.
+// 젬 수치 바꾸기도 {k, add|mul|set} 한 모양. has:1이면 스킬에 그 수치가 있을 때만 바꾼다(지속 연장 등).
+// g로 시작하는 키(gLeech·gBurn·gSlow·gStun·gBoom·gRepeat)는 어느 스킬에나 붙는 공통 효과로, hitE()·step()이 읽는다.
+const GEM_R=['일반','희귀','전설'],GEM_RCOL=['#c9c4ba','#ffd65c','#ff8a3d'],GEM_K=[1,1.5,2.2];
+const SOCK_LV=[1,10,25];
+const sockCount=L=>SOCK_LV.filter(v=>L>=v).length;
+const GEMS=[
+  {id:'focus',n:'집중',req:['single'],d:k=>`단일 피해 +${pc(.2*k)}`,m:k=>[{k:'mult',mul:1+.2*k}]},
+  {id:'widen',n:'광역 확대',req:['aoe'],d:k=>`광역 피해 +${pc(.2*k)}`,m:k=>[{k:'mult',mul:1+.2*k}]},
+  {id:'haste',n:'재사용 단축',req:['*'],d:k=>`재사용 대기시간 -${pc(.12*k)}`,m:k=>[{k:'cd',mul:1-.12*k}]},
+  {id:'chaing',n:'연쇄',req:['chain','proj'],d:k=>k>=2?'2번 더 튐 (한 번에 85%)':'1번 더 튐',m:k=>k>=2?[{k:'hits',add:2},{k:'mult',mul:.85}]:[{k:'hits',add:1}]},
+  {id:'split',n:'분열',req:['spell'],not:['summon'],nosup:1,d:k=>`0.4초 뒤 한 번 더 시전 (위력 ${pc(.25*k)})`,m:k=>[{k:'gRepeat',add:.25*k}]},
+  {id:'fireconv',n:'화염 전환',req:['atk','spell'],nosup:1,fxcol:'#ff7a2a',d:k=>`맞은 적 3초간 초당 공격력 ${pc(.4*k)} 화상`,m:k=>[{k:'gBurn',add:.4*k}]},
+  {id:'coldconv',n:'냉기 전환',req:['atk','spell'],nosup:1,fxcol:'#9fe8ff',d:k=>`맞히면 ${s1(1.5*k)}초간 적 공격 속도 40% 감소, 피해 +${pc(.1*k)}`,m:k=>[{k:'gSlow',add:1.5*k},{k:'mult',mul:1+.1*k}]},
+  {id:'shockg',util:1,n:'충격',req:['melee','stun'],d:k=>`맞은 적 ${s1(.4*k)}초 기절`,m:k=>[{k:'gStun',add:.4*k}]},
+  {id:'leechg',util:1,n:'흡혈',req:['atk','spell'],nosup:1,d:k=>`준 피해의 ${pc(.03*k)} 회복`,m:k=>[{k:'gLeech',add:.03*k}]},
+  {id:'boom',util:1,n:'처치 시 폭발',req:['atk','spell'],nosup:1,d:k=>`이 스킬로 적을 처치하면 다른 적에게 공격력 ${pc(.6*k)} 폭발`,m:k=>[{k:'gBoom',add:.6*k}]},
+  {id:'linger',n:'지속 연장',req:['dot','summon','buff','guard','delay'],d:k=>`지속 시간 +${pc(.25*k)}`,m:k=>['dur','burnT','guardT','slow'].map(x=>({k:x,mul:1+.25*k,has:1}))},
+];
+const GEMMAP=Object.fromEntries(GEMS.map(g=>[g.id,g]));
+const gemOk=(g,sk)=>!(g.nosup&&sk.sup)&&!(g.not&&g.not.some(t=>sk.tags.includes(t)))&&(g.req.includes('*')||g.req.some(t=>sk.tags.includes(t)));
+function gemName(x){return `${GEM_R[x.r]} ${GEMMAP[x.g].n}`;}
+function gemDesc(x){return GEMMAP[x.g].d(GEM_K[x.r]);}
+function gemSalv(x){return [3,8,25][x.r];}
+function gemById(u){return S.gems.find(x=>x.u===u);}
+function gemUsedBy(u){for(const id in S.sock)if((S.sock[id]||[]).includes(u))return id;return null;}
+function gemMods(id){const sk=SKMAP[id],L=S.skills[id]||1,out=[];const s=(S.sock&&S.sock[id])||[];
+  for(let i=0;i<sockCount(L);i++){const x=s[i]&&gemById(s[i]);if(!x)continue;const g=GEMMAP[x.g];if(!gemOk(g,sk))continue;out.push({g,mods:g.m(GEM_K[x.r])});}
+  return out;}
+function rollGemR(boost){const r=Math.random();return r<.03*boost?2:r<.25*boost?1:0;}
+function addGem(r,src){const g=pick(GEMS).id,x={u:S.nextGem++,g,r};S.gems.push(x);S.stats.gems=(S.stats.gems||0)+1;
+  log(`보조 젬 획득: <span style="color:${GEM_RCOL[r]}">${gemName(x)}</span>${src?` <small>(${src})</small>`:''}`);if(r===2)toast(`전설 보조 젬! 「${GEMMAP[g].n}」`,1);
+  if(S.sort.gemMerge)gemAutoMerge();dirty('skills','tabs');}
+function gemMerge(g,r){if(r>=2)return false;const free=S.gems.filter(x=>x.g===g&&x.r===r&&!gemUsedBy(x.u));if(free.length<3)return false;
+  const used=new Set(free.slice(0,3).map(x=>x.u));S.gems=S.gems.filter(x=>!used.has(x.u));const nx={u:S.nextGem++,g,r:r+1};S.gems.push(nx);
+  log(`젬 합성: <span style="color:${GEM_RCOL[r+1]}">${gemName(nx)}</span>`);return true;}
+function gemAutoMerge(){let any=true;while(any){any=false;for(const g of GEMS)for(const r of [0,1])if(gemMerge(g.id,r))any=true;}}
 function skillCd(id){return Math.max(1,skP(id).cd)*RT.cs.cdMult;}
 function skFx(id,o){const F=SKMAP[id].fx;RT.fx.push(Object.assign({k:F.t,col:F.col,life:1},o));}
 // 갈래를 바꾸는 비용(마력석). 처음 고를 때는 무료.
@@ -495,7 +540,7 @@ function stageName(st){const t=Math.floor((st-1)/60);return `${region(st).n}${t?
 const SAVE_KEY='ashen_depths_v1';
 function newState(){return{
   v:1,lvl:1,xp:0,gold:0,stones:0,stage:1,maxStage:1,kills:0,autoPush:true,
-  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null,null],br:{},
+  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null,null],br:{},gems:[],sock:{},nextGem:1,
   autoSalv:[true,false,false],speed:1,autoEquip:false,setSeen:{},sort:sortDefault(),
   stats:{kills:0,legends:0,sets:0,deaths:0,bosses:0,time:0,items:0},
   killRate:0,last:Date.now()
@@ -503,7 +548,7 @@ function newState(){return{
 let S=newState();
 const RT={enemies:[],hero:{hp:1,atkT:0,dead:0,anim:0,hit:0},cds:{},cry:0,cryV:0,slowT:0,
   boss:false,bossT:0,spawnT:.6,fx:[],texts:[],log:[],dirty:{},deathStreak:0,winK:0,winT:0,cs:null,tab:'equip',selId:null,flash:0,
-  shake:0,lastKillX:.72,pend:[],storm:{t:0},clones:[],guard:{red:0,t:0,refl:0},regenB:{t:0,rate:0},wait:{},cryLeech:0,resetNow:null,invF:'all',upCount:0,sortT:0,sortAgg:{n:0,m:0}};
+  shake:0,lastKillX:.72,pend:[],recast:[],curP:null,storm:{t:0},clones:[],guard:{red:0,t:0,refl:0},regenB:{t:0,rate:0},wait:{},cryLeech:0,resetNow:null,invF:'all',upCount:0,sortT:0,sortAgg:{n:0,m:0}};
 function dirty(...k){k.forEach(x=>RT.dirty[x]=1);}
 
 function save(){S.last=Date.now();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){}}
@@ -512,7 +557,7 @@ function load(){
 }
 // 정리 규칙(v0.4.2): on=자동 정리(30초마다 가방에도 적용), weak=지금 장비보다 약하면 분해(weakTo: 2 희귀 이하 / 3 전설까지),
 // dup=중복 세트 조각 분해, keep=이 옵션(접사)이 붙으면 남기기(최대 2개)
-function sortDefault(){return{on:false,weak:false,weakTo:2,dup:false,keep:[]};}
+function sortDefault(){return{on:false,weak:false,weakTo:2,dup:false,keep:[],gemMerge:false};}
 function applySave(o){
   const d=newState();S=Object.assign(d,o);S.stats=Object.assign(newState().stats,o.stats||{});
   if(!S.setSeen||typeof S.setSeen!=='object')S.setSeen={};
@@ -521,6 +566,7 @@ function applySave(o){
   for(const it of [...Object.values(S.eq),...S.inv])if(it&&it.set)markSeen(it);
   while(S.slots.length<MAX_SLOTS)S.slots.push(null);S.slots=S.slots.slice(0,MAX_SLOTS).map(x=>x&&SKMAP[x]?x:null);
   if(!S.br||typeof S.br!=='object')S.br={};
+  if(!Array.isArray(S.gems))S.gems=[];if(!S.sock||typeof S.sock!=='object')S.sock={};S.nextGem=Math.max(S.nextGem||1,...S.gems.map(x=>x.u+1),1);
 }
 
 // ================= 능력치 =================
@@ -680,6 +726,7 @@ function kill(e){
   const g=2*s*(1+C.gold/100)*(e.boss?12:1);S.gold+=g;
   if(e.boss){
     for(let i=0;i<3;i++)addLoot(rollDrop(st+2,4,true));
+    if(Math.random()<0.4)addGem(rollGemR(2),'보스');
     S.stats.bosses++;RT.boss=false;RT.deathStreak=0;
     const first=st>=S.maxStage;S.maxStage=Math.max(S.maxStage,st+1);
     log(`<b style="color:#f0d49a">${e.name} 처치!</b> ${first?'새 스테이지가 열렸습니다.':''}`);
@@ -688,6 +735,7 @@ function kill(e){
   }else{
     let drops=Math.random()<0.24?1:0;if(C.legs.has('midas')&&Math.random()<0.05)drops++;
     for(let i=0;i<drops;i++)addLoot(rollDrop(st+(Math.random()<0.3?1:0),1,false));
+    if(Math.random()<0.012)addGem(rollGemR(1));
     S.kills++;
     if(S.kills>=KILLS_PER_STAGE){RT.deathStreak=0;
       if(S.autoPush){
@@ -726,7 +774,12 @@ function burnE(e,frac,t,spread){if(!e||e.dead||frac<=0)return;const dps=RT.cs.at
 // 한 대 때리고 부가 효과(기절·화상·밀침)를 붙임. 실제로 깎은 생명력을 돌려줌(흡혈 계산용)
 function hitE(e,dmg,P){if(!e||e.dead)return 0;const before=Math.max(0,e.hp);dealDmg(e,dmg,true);
   if(P){if(P.stun&&!e.dead)e.stun=Math.max(e.stun||0,P.stun);if(P.burn)burnE(e,P.burn,P.burnT||3,P.spread);if(P.knock&&!e.dead)e.atkT+=P.knock;}
-  return before-Math.max(0,e.dead?0:e.hp);}
+  const dealt=before-Math.max(0,e.dead?0:e.hp),Q=RT.curP;
+  if(Q){ // 보조 젬 공통 효과
+    if(!e.dead){if(Q.gStun)e.stun=Math.max(e.stun||0,Q.gStun);if(Q.gBurn)burnE(e,Q.gBurn,3);if(Q.gSlow)RT.slowT=Math.max(RT.slowT,Q.gSlow);}
+    if(Q.gLeech)healHero(dealt*Q.gLeech);
+    if(Q.gBoom&&e.dead&&!RT.inBoom){RT.inBoom=1;RT.fx.push({k:'burst',x:e.x,y:e.y-.06,col:'#ffb04a',life:1});alive().forEach(o=>hitE(o,RT.cs.atk*Q.gBoom,null));RT.inBoom=0;}}
+  return dealt;}
 // 언제 쓸지: 회복은 생명력 기준, 처형은 약한 적이 있거나 보스일 때, 광역은 거의 죽은 적 하나에 낭비하지 않음, 지속형은 겹쳐 쓰지 않음
 function wantCast(id,P,en){const H=RT.hero,C=RT.cs,sk=SKMAP[id];
   if(id==='blood')return H.hp<=C.hp*P.gate;
@@ -738,13 +791,18 @@ function wantCast(id,P,en){const H=RT.hero,C=RT.cs,sk=SKMAP[id];
   if(id==='shield'&&RT.guard.t>1&&!boss)return false;
   if(sk.tags.includes('aoe')&&!boss&&en.length===1&&en[0].hp/en[0].max<.35&&w<2)return false;
   return true;}
-function cast(id){
-  const C=RT.cs,H=RT.hero,en=alive(),P=skP(id),sk=SKMAP[id],col=P.fxcol||sk.fx.col,A=C.atk,front=en[0];
+function cast(id,scale){RT.curP=null;const P0=skP(id);
+  if(scale){for(const k of ['mult','burn','after'])if(P0[k])P0[k]*=scale;P0.gRepeat=0;}
+  RT.curP=P0;const ok=castInner(id,P0);RT.curP=null;
+  if(ok&&P0.gRepeat&&!scale)RT.recast.push({id,t:.4,scale:P0.gRepeat});
+  return ok;}
+function castInner(id,P){
+  const C=RT.cs,H=RT.hero,en=alive(),sk=SKMAP[id],col=P.fxcol||sk.fx.col,A=C.atk,front=en[0];
   const fx=(o,k)=>RT.fx.push(Object.assign({k:k||sk.fx.t,col,life:1},o));
   if(!en.length&&id!=='blood')return false;
   switch(id){
     case 'smash':for(let h=0;h<P.hits;h++){hitE(front,A*P.mult,P);if(P.splash)alive().slice(1).forEach(e=>hitE(e,A*P.mult*P.splash,null));}
-      fx({x:front.x,y:front.y-.08});if(P.after)RT.pend.push({t:1,mult:P.after,k:'burst',col:'#ff9a3a',leech:0});break;
+      fx({x:front.x,y:front.y-.08});if(P.after)RT.pend.push({t:1,mult:P.after,k:'burst',col:'#ff9a3a',leech:0,P});break;
     case 'whirl':for(let h=0;h<P.hits;h++){let d=0;alive().forEach(e=>{d+=hitE(e,A*P.mult,P);});if(P.leech)healHero(d*P.leech);}
       fx({x:HX,y:HY-.02,r:.22});if(P.hits>1)fx({x:HX,y:HY-.02,r:.17,life:.7});break;
     case 'chain':{const pts=[{x:HX,y:HY-.1}];for(let i=0;i<P.hits;i++){const a=alive();if(!a.length)break;const e=pick(a);pts.push({x:e.x,y:e.y-.08});hitE(e,A*P.mult*(P.lastx2&&i===P.hits-1?2:1),P);}
@@ -762,12 +820,12 @@ function cast(id){
     case 'vamp':{let d=0;(P.targets>1?en:[front]).forEach(e=>{d+=hitE(e,A*P.mult,null);});const h=Math.min(d*P.leech,C.hp*P.cap);healHero(h);
       if(h>0)text(HX,HY-.25,'+'+fmt(h),'#74d083',13);fx({x:front.x,y:front.y-.04});break;}
     case 'fire':alive().forEach(e=>hitE(e,A*P.mult,{burn:P.burn,burnT:P.burnT,spread:P.spread}));en.forEach(e=>fx({x:e.x,y:e.y-.06}));break;
-    case 'storm':RT.storm={t:P.dur,tick:P.tick,acc:0,mult:P.mult,col};if(P.guard)setGuard(P.guard,P.dur);fx({x:HX,y:HY-.02,r:.2});break;
+    case 'storm':RT.storm={t:P.dur,tick:P.tick,acc:0,mult:P.mult,col,P};if(P.guard)setGuard(P.guard,P.dur);fx({x:HX,y:HY-.02,r:.2});break;
     case 'fissure':{let i=0;for(const e of en){hitE(e,A*P.mult*(1+P.grow*i),P);i++;}fx({x:HX+.04,y:HY+.06,x2:en[en.length-1].x+.04});break;}
-    case 'clone':RT.clones=Array.from({length:P.count},(_,i)=>({t:P.dur,acc:-i*.3,rate:P.rate,mult:P.mult,leech:P.leech||0,i}));fx({x:HX+.07,y:HY-.04,r:.12});break;
+    case 'clone':RT.clones=Array.from({length:P.count},(_,i)=>({t:P.dur,acc:-i*.3,rate:P.rate,mult:P.mult,leech:P.leech||0,i,P}));fx({x:HX+.07,y:HY-.04,r:.12});break;
     case 'shield':hitE(front,A*P.mult,null);(P.knockAll?en:[front]).forEach(e=>{if(!e.dead)e.atkT+=P.knock;});setGuard(P.guard,P.guardT,P.refl);
       fx({x:front.x-.05,y:front.y-.06});RT.shake=Math.max(RT.shake,.15);break;
-    case 'rift':for(let i=0;i<P.count;i++){const d=P.delay+i*.7;RT.pend.push({t:d,mult:P.mult,k:'rift',col,leech:P.leech||0});fx({x:.73,y:.7,life:1,spd:1/d},'riftOpen');}break;
+    case 'rift':for(let i=0;i<P.count;i++){const d=P.delay+i*.7;RT.pend.push({t:d,mult:P.mult,k:'rift',col,leech:P.leech||0,P});fx({x:.73,y:.7,life:1,spd:1/d},'riftOpen');}break;
   }
   return true;
 }
@@ -776,16 +834,17 @@ function tickSkillFx(dt){
   const C=RT.cs,g=RT.guard;if(g.t>0)g.t-=dt;
   if(RT.regenB.t>0){RT.regenB.t-=dt;healHero(C.hp*RT.regenB.rate*dt);}
   for(let i=RT.pend.length-1;i>=0;i--){const p=RT.pend[i];p.t-=dt;if(p.t>0)continue;RT.pend.splice(i,1);
-    let d=0;alive().forEach(e=>{d+=hitE(e,C.atk*p.mult,null);});if(p.leech)healHero(d*p.leech);
+    RT.curP=p.P||null;let d=0;alive().forEach(e=>{d+=hitE(e,C.atk*p.mult,null);});RT.curP=null;if(p.leech)healHero(d*p.leech);
     RT.fx.push({k:p.k,x:.73,y:.7,col:p.col,r:.3,life:1});RT.shake=Math.max(RT.shake,.25);}
-  const st=RT.storm;if(st.t>0){st.t-=dt;st.acc+=dt;while(st.acc>=st.tick){st.acc-=st.tick;const a=alive();if(!a.length)break;a.forEach(e=>hitE(e,C.atk*st.mult,null));
+  const st=RT.storm;if(st.t>0){st.t-=dt;st.acc+=dt;while(st.acc>=st.tick){st.acc-=st.tick;const a=alive();if(!a.length)break;RT.curP=st.P||null;a.forEach(e=>hitE(e,C.atk*st.mult,null));RT.curP=null;
     if(Math.random()<.5)RT.fx.push({k:'spin',x:HX,y:HY-.02,r:.16,col:st.col,life:.6});}}
   for(let i=RT.clones.length-1;i>=0;i--){const c=RT.clones[i];c.t-=dt;if(c.t<=0){RT.clones.splice(i,1);continue;}c.acc+=dt;
-    if(c.acc>=c.rate){c.acc-=c.rate;c.anim=.22;const e=alive()[0];if(e){const d=hitE(e,C.atk*c.mult,null);if(c.leech)healHero(d*c.leech);}}if(c.anim>0)c.anim-=dt;}
+    if(c.acc>=c.rate){c.acc-=c.rate;c.anim=.22;const e=alive()[0];if(e){RT.curP=c.P||null;const d=hitE(e,C.atk*c.mult,null);RT.curP=null;if(c.leech)healHero(d*c.leech);}}if(c.anim>0)c.anim-=dt;}
+  for(let i=RT.recast.length-1;i>=0;i--){const r=RT.recast[i];r.t-=dt;if(r.t>0)continue;RT.recast.splice(i,1);if(alive().length)cast(r.id,r.scale);}
   for(const e of RT.enemies){if(e.dead)continue;if(e.stun>0)e.stun-=dt;
     if(e.burn&&e.burn.t>0){e.burn.t-=dt;e.hp-=e.burn.dps*dt;if(e.hp<=0&&!e.dead)kill(e);}}
 }
-function resetSkillFx(){RT.pend=[];RT.storm={t:0};RT.clones=[];RT.guard={red:0,t:0,refl:0};RT.regenB={t:0,rate:0};RT.wait={};}
+function resetSkillFx(){RT.recast=[];RT.curP=null;RT.pend=[];RT.storm={t:0};RT.clones=[];RT.guard={red:0,t:0,refl:0};RT.regenB={t:0,rate:0};RT.wait={};}
 
 function step(dt){
   const C=RT.cs,H=RT.hero;S.stats.time+=dt;sortTick(dt);
@@ -1219,6 +1278,7 @@ function sortBoxHTML(){const R=S.sort;
     <div class="rl"><label><input type="checkbox" data-act="sr" data-k="dup" ${R.dup?'checked':''}> 중복 세트 조각 분해</label><small>같은 세트·부위를 더 높은 레벨로 가지면</small></div>
     <div class="rl"><span>이 옵션이 붙으면 남기기</span><span>${opt(0)} ${opt(1)}</span></div>
     <div class="rl"><label><input type="checkbox" data-act="sr" data-k="on" ${R.on?'checked':''}> <b>자동 정리</b> — 30초마다 가방에도 적용</label></div>
+    <div class="rl"><label><input type="checkbox" data-act="sr" data-k="gemMerge" ${R.gemMerge?'checked':''}> 보조 젬 자동 합성</label><small>안 끼운 같은 젬·등급 3개 → 상위 등급</small></div>
     <p class="note" style="margin:2px 0 0">우선순위: 잠금 &gt; 남기기 옵션 &gt; 도감 새 조각 &gt; 분해 규칙 &gt; 등급별 분해. 가방 정리는 잠금·전설·남기기·세트 첫 조각을 건드리지 않습니다. 「약하면」 비교에는 전설 고유 효과가 들어가지 않습니다.</p>
   </div>`;}
 function dexTotal(){return Object.values(SETS).reduce((a,s)=>a+s.parts.length,0);}
@@ -1254,6 +1314,25 @@ function tickSkillbar(){
 function renderLog(){const el=$('#log');const atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-20;el.innerHTML=RT.log.map(l=>`<div>${l}</div>`).join('');if(atBottom)el.scrollTop=el.scrollHeight;}
 function tpLeft(){return S.lvl-1-Object.values(S.tal).reduce((a,b)=>a+b,0);}
 function countUp(){let n=0;if(RT.cs)for(const it of S.inv)if(upgradeScore(it)>1.01)n++;return RT.upCount=n;}
+function sockHTML(sk,L){const s=S.sock[sk.id]||[];let h='<div class="socks"><span class="brlv">보조 젬</span>';
+  for(let i=0;i<3;i++){if(L<SOCK_LV[i]){h+=`<span class="sock lockd">Lv ${SOCK_LV[i]}</span>`;continue;}
+    const x=s[i]&&gemById(s[i]);
+    h+=x?`<button class="sock on" data-act="unsock" data-id="${sk.id}" data-i="${i}" title="눌러서 빼기"><b style="color:${GEM_RCOL[x.r]}">${GEMMAP[x.g].n}</b><small>${gemDesc(x)}</small></button>`
+       :`<button class="sock" data-act="sockpick" data-id="${sk.id}" data-i="${i}">＋ 젬 끼우기</button>`;}
+  return h+'</div>';}
+function gemBagHTML(){if(!S.gems.length)return `<h3>보조 젬 <span class="r">아직 없음 · 적과 보스에게서 얻어요</span></h3>`;
+  const grp={};for(const x of S.gems){const k=x.g+'|'+x.r;(grp[k]||(grp[k]={g:x.g,r:x.r,all:[],free:[]})).all.push(x);if(!gemUsedBy(x.u))grp[k].free.push(x);}
+  const rows=Object.values(grp).sort((a,b)=>b.r-a.r||a.g.localeCompare(b.g)).map(G=>{const x=G.all[0],g=GEMMAP[G.g];
+    return `<div class="gemrow"><div class="t"><b style="color:${GEM_RCOL[G.r]}">${gemName(x)}</b> <small class="pips">×${G.all.length}${G.free.length<G.all.length?` (끼움 ${G.all.length-G.free.length})`:''}</small>
+      <small style="color:var(--dim)"> · ${g.req.includes('*')?'모든 스킬':g.req.map(t=>TAGN[t]).join('·')}</small><p>${gemDesc(x)}</p></div>
+      <div class="gbtns">${G.r<2?`<button data-act="gmerge" data-g="${G.g}" data-r="${G.r}" ${G.free.length<3?'disabled':''} title="안 끼운 같은 젬 3개 → 상위 등급">합성</button>`:''}<button data-act="gsalv" data-g="${G.g}" data-r="${G.r}" ${G.free.length?'':'disabled'}>분해 ◆${gemSalv(x)}</button></div></div>`;}).join('');
+  return `<h3>보조 젬 <span class="r">${S.gems.length}개 · 스킬 아래 칸에 끼워요</span></h3><div class="gembag">${rows}</div>`;}
+function openGemPick(id,i){const sk=SKMAP[id],s=S.sock[id]||[],inSkill=new Set(s.filter((u,j)=>u&&j!==i).map(u=>{const x=gemById(u);return x&&x.g;}));
+  const cand=S.gems.filter(x=>!gemUsedBy(x.u)&&gemOk(GEMMAP[x.g],sk)&&!inSkill.has(x.g)).sort((a,b)=>b.r-a.r);
+  const m=$('#modal');m.dataset.id='0';
+  m.innerHTML=`<div class="mbox"><h2 style="color:#f0d49a">${sk.n} · 보조 젬 ${i+1}</h2><div class="meta">${sk.tags.map(t=>TAGN[t]).join(' · ')} 스킬에 맞는 젬만 보여요. 같은 젬은 한 스킬에 하나만.</div>
+    <div class="list">${cand.length?cand.map(x=>`<button class="gempick" data-act="gset" data-id="${id}" data-i="${i}" data-u="${x.u}"><b style="color:${GEM_RCOL[x.r]}">${gemName(x)}</b><small>${gemDesc(x)}</small></button>`).join(''):'<p class="note">끼울 수 있는 젬이 없습니다.</p>'}</div>
+    <div class="mbtns"><button data-act="close">닫기</button></div></div>`;m.classList.remove('hide');}
 function brPending(){for(const sk of SKILLS){const L=S.skills[sk.id];if(!L||!sk.br)continue;const ch=S.br[sk.id]||[];for(let t=0;t<sk.br.length;t++)if(L>=BR_LV[t]&&!ch[t])return true;}return false;}
 function renderTabs(){const up=countUp();document.querySelectorAll('#tabs button').forEach(b=>{b.classList.toggle('on',b.dataset.tab===RT.tab);
   if(!b.dataset.label)b.dataset.label=b.textContent.trim();
@@ -1287,7 +1366,7 @@ function renderPanel(){
     else{for(const it of shown)h+=cardHTML(it,true);if(!shown.length)h+='<div class="note" style="grid-column:1/-1">해당하는 장비가 없습니다.</div>';}
     h+='</div>';P.innerHTML=h;
   }else if(RT.tab==='skills'){
-    let h=`<h3>스킬 <span class="r">전투 중 자동 시전 · 장착 칸 ${slotCount()}개${slotCount()<MAX_SLOTS?` (Lv ${slotCount()===3?20:40}에 하나 더)`:''}</span></h3><div class="list">`;
+    let h=gemBagHTML()+`<h3>스킬 <span class="r">전투 중 자동 시전 · 장착 칸 ${slotCount()}개${slotCount()<MAX_SLOTS?` (Lv ${slotCount()===3?20:40}에 하나 더)`:''}</span></h3><div class="list">`;
     const order=SKILLS.slice().sort((a,b)=>(S.slots.includes(b.id)-S.slots.includes(a.id))||((!!S.skills[b.id])-(!!S.skills[a.id]))||a.lv-b.lv);
     for(const sk of order){const L=S.skills[sk.id];const tags=sk.tags.map(t=>`<span class="tag">${TAGN[t]}</span>`).join('');
       if(!L){h+=`<div class="li locked"><div class="t"><b>${sk.n}</b> <small>Lv ${sk.lv}에 습득</small> ${tags}<p>${sk.d(skP(sk.id))}</p></div></div>`;continue;}
@@ -1299,7 +1378,7 @@ function renderPanel(){
         const cur=ch[ti];
         br+=`<div class="brrow"><span class="brlv">갈래 ${ti+1}${cur?'':' <b class="new">선택</b>'}</span><div class="brops">${tier.map(o=>`<button data-act="br" data-id="${sk.id}" data-t="${ti}" data-o="${o.id}" class="bro${cur===o.id?' on':''}" ${cur&&cur!==o.id&&S.stones<brCost(ti)?'disabled':''}><b>${o.n}</b><small>${o.d}</small></button>`).join('')}</div>${cur?`<small class="brc">바꾸기: ◆${brCost(ti)}</small>`:''}</div>`;});
       h+=`<div class="li sk2"><div class="t"><b>${sk.n}</b> <small class="pips">Lv ${L}</small> <small style="color:var(--dim)">· ${skillCd(sk.id).toFixed(1)}초</small> ${tags}<p>${sk.d(P)}</p>
-        <div class="row" style="margin:6px 0 0"><button data-act="skup" data-id="${sk.id}" ${S.gold<cost||L>=30?'disabled':''}>강화 <span class="g">●</span> ${fmt(cost)}</button>${sb}</div>${br}</div></div>`;}
+        <div class="row" style="margin:6px 0 0"><button data-act="skup" data-id="${sk.id}" ${S.gold<cost||L>=30?'disabled':''}>강화 <span class="g">●</span> ${fmt(cost)}</button>${sb}</div>${sockHTML(sk,L)}${br}</div></div>`;}
     P.innerHTML=h+'</div><p class="note">같은 번호를 다시 누르면 그 칸에서 해제됩니다. 갈래는 스킬 레벨 5·15·30에 열리고, 처음 고를 때는 무료, 바꿀 때는 마력석이 듭니다. 스킬은 알아서 때를 봐서 씁니다(회복은 생명력이 낮을 때, 처형은 약한 적이나 보스에게, 광역은 거의 죽은 적 하나에는 아껴 둠).</p>';
   }else if(RT.tab==='talents'){
     const left=tpLeft();const rc=50*S.lvl;
@@ -1315,7 +1394,7 @@ function renderPanel(){
       <h3>기록</h3><div class="kv">
       <span>플레이 시간</span><b>${Math.floor(tm/3600)}시간 ${Math.floor(tm%3600/60)}분</b>
       <span>처치한 적</span><b>${fmt(st.kills)}</b><span>처치한 보스</span><b>${fmt(st.bosses)}</b>
-      <span>얻은 아이템</span><b>${fmt(st.items)}</b><span>얻은 전설</span><b class="c3">${fmt(st.legends)}</b><span>얻은 세트</span><b class="c4">${fmt(st.sets||0)}</b>
+      <span>얻은 아이템</span><b>${fmt(st.items)}</b><span>얻은 전설</span><b class="c3">${fmt(st.legends)}</b><span>얻은 세트</span><b class="c4">${fmt(st.sets||0)}</b><span>얻은 보조 젬</span><b>${fmt(st.gems||0)}</b>
       <span>사망</span><b>${fmt(st.deaths)}</b><span>최고 스테이지</span><b>${S.maxStage}</b>
       <span>평균 처치 속도</span><b>${(S.killRate*60).toFixed(1)}/분</b></div>
       <h3>자동 장착</h3><div class="chk"><label><input type="checkbox" data-act="ae" ${S.autoEquip?'checked':''}> 주운 장비가 지금보다 5% 넘게 강하면 바로 장착</label></div>
@@ -1364,6 +1443,8 @@ function openItem(id){
 }
 function closeModal(){const m=$('#modal');m.classList.add('hide');m.innerHTML='';RT.selId=null;dirty('equip');}
 function modalAct(act,el){
+  if(act==='gset'){const sid=el.dataset.id,i=+el.dataset.i,u=+el.dataset.u;const s=S.sock[sid]||(S.sock[sid]=[]);if(!gemUsedBy(u)){s[i]=u;recalc();}
+    closeModal();dirty('skills','skillbar');return;}
   const id=+$('#modal').dataset.id;const f=findItem(id);if(!f&&act!=='close'){closeModal();return;}
   const it=f&&f.it;
   if(act==='close'){closeModal();return;}
@@ -1381,6 +1462,10 @@ function panelAct(act,el){
   else if(act==='bulk'){const r=+el.dataset.r;let n=0,v=0;S.inv=S.inv.filter(it=>{if(it.rarity===r&&!it.lock){n++;v+=salvVal(it);return false;}return true;});S.stones+=v;if(n)toast(`${n}개 분해 · ◆${fmt(v)}`,1);dirty('equip','header');}
   else if(act==='bulkdown'){let n=0,v=0;S.inv=S.inv.filter(it=>{if(!it.lock&&it.rarity<3&&upgradeScore(it)<=1.01){n++;v+=salvVal(it);return false;}return true;});S.stones+=v;if(n)toast(`${n}개 분해 · ◆${fmt(v)} (전설·잠금 제외)`,1);dirty('equip','header');}
   else if(act==='slot'){const i=+el.dataset.i,id=el.dataset.id;if(S.slots[i]===id)S.slots[i]=null;else{S.slots=S.slots.map(x=>x===id?null:x);S.slots[i]=id;}dirty('skills','skillbar');}
+  else if(act==='sockpick'){openGemPick(el.dataset.id,+el.dataset.i);}
+  else if(act==='unsock'){const s=S.sock[el.dataset.id]||[];s[+el.dataset.i]=null;recalc();dirty('skills');}
+  else if(act==='gmerge'){if(gemMerge(el.dataset.g,+el.dataset.r))dirty('skills');}
+  else if(act==='gsalv'){const g=el.dataset.g,r=+el.dataset.r;const x=S.gems.find(z=>z.g===g&&z.r===r&&!gemUsedBy(z.u));if(x){S.gems=S.gems.filter(z=>z!==x);S.stones+=gemSalv(x);dirty('skills','header');}}
   else if(act==='br'){const id=el.dataset.id,ti=+el.dataset.t,o=el.dataset.o,ch=S.br[id]||(S.br[id]=[]);
     if(ch[ti]===o)return;if(ch[ti]){if(S.stones<brCost(ti))return;S.stones-=brCost(ti);}ch[ti]=o;
     const opt=SKMAP[id].br[ti].find(x=>x.id===o);toast(`${SKMAP[id].n} 갈래: ${opt.n}`,1);dirty('skills','header','skillbar','tabs');}
