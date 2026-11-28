@@ -93,6 +93,11 @@ h3 .r{margin-left:auto;font-family:'Noto Sans KR';font-size:12px;color:var(--dim
 .dexrow b{font-size:13px}.dexrow .pt{display:inline-block;margin:2px 8px 0 0;color:#5f5548}.dexrow .pt.on{color:#d6ffe2}
 .dexrow .wh{color:var(--dim);font-size:11px}
 .full{color:#ff8b7d!important}
+.rules{border:1px solid var(--line);background:#100d0b;border-radius:8px;padding:6px 9px;font-size:12.5px}
+.rules .rl{display:flex;justify-content:space-between;align-items:center;gap:6px;flex-wrap:wrap;padding:4px 0;border-bottom:1px dashed #2a221a}
+.rules .rl:last-of-type{border-bottom:0}.rules .rl small{color:var(--dim)}.rules label{display:flex;align-items:center;gap:5px;cursor:pointer}
+.rules .chk{gap:8px}
+select{font:inherit;font-size:12px;color:var(--text);background:var(--panel2);border:1px solid var(--line2);border-radius:5px;padding:2px 4px;max-width:150px}
 .slotlbl{font-size:10px;color:var(--dim);text-align:center;margin-top:2px}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px;font-size:12.5px;background:#100d0b;border:1px solid var(--line);border-radius:7px;padding:8px 10px}
 .stats div{display:flex;justify-content:space-between}
@@ -142,7 +147,7 @@ textarea{width:100%;height:80px;background:#0c0a08;color:var(--text);border:1px 
 <body>
 <div id="app">
   <header>
-    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.4.1</div></div>
+    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.4.2</div></div>
     <div class="res">
       <div class="lv">Lv <b id="lv">1</b></div>
       <div class="xpbar"><i id="xpf"></i><span id="xpt"></span></div>
@@ -328,23 +333,27 @@ const SAVE_KEY='ashen_depths_v1';
 function newState(){return{
   v:1,lvl:1,xp:0,gold:0,stones:0,stage:1,maxStage:1,kills:0,autoPush:true,
   eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null],
-  autoSalv:[true,false,false],speed:1,autoEquip:false,setSeen:{},
+  autoSalv:[true,false,false],speed:1,autoEquip:false,setSeen:{},sort:sortDefault(),
   stats:{kills:0,legends:0,sets:0,deaths:0,bosses:0,time:0,items:0},
   killRate:0,last:Date.now()
 };}
 let S=newState();
 const RT={enemies:[],hero:{hp:1,atkT:0,dead:0,anim:0,hit:0},cds:{},cry:0,cryV:0,slowT:0,
   boss:false,bossT:0,spawnT:.6,fx:[],texts:[],log:[],dirty:{},deathStreak:0,winK:0,winT:0,cs:null,tab:'equip',selId:null,flash:0,
-  shake:0,lastKillX:.72,invF:'all',upCount:0};
+  shake:0,lastKillX:.72,invF:'all',upCount:0,sortT:0,sortAgg:{n:0,m:0}};
 function dirty(...k){k.forEach(x=>RT.dirty[x]=1);}
 
 function save(){S.last=Date.now();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){}}
 function load(){
   try{const raw=localStorage.getItem(SAVE_KEY);if(!raw)return false;applySave(JSON.parse(raw));return true;}catch(e){return false;}
 }
+// 정리 규칙(v0.4.2): on=자동 정리(30초마다 가방에도 적용), weak=지금 장비보다 약하면 분해(weakTo: 2 희귀 이하 / 3 전설까지),
+// dup=중복 세트 조각 분해, keep=이 옵션(접사)이 붙으면 남기기(최대 2개)
+function sortDefault(){return{on:false,weak:false,weakTo:2,dup:false,keep:[]};}
 function applySave(o){
   const d=newState();S=Object.assign(d,o);S.stats=Object.assign(newState().stats,o.stats||{});
   if(!S.setSeen||typeof S.setSeen!=='object')S.setSeen={};
+  S.sort=Object.assign(sortDefault(),o.sort||{});if(!Array.isArray(S.sort.keep))S.sort.keep=[];S.sort.keep=S.sort.keep.filter(k=>AFF[k]).slice(0,2);
   // v0.3 이전 저장: 지금 가진 세트 조각을 도감에 채워 넣음
   for(const it of [...Object.values(S.eq),...S.inv])if(it&&it.set)markSeen(it);
   while(S.slots.length<4)S.slots.push(null);
@@ -429,11 +438,36 @@ function tryAutoEquip(it){
   if(old){if(S.inv.length<INV_MAX)S.inv.push(old);else if(old.rarity<3&&!old.lock)S.stones+=salvVal(old);else S.inv.push(old);}
   dirty('equip','tabs');return true;
 }
+// ---- 정리 규칙 ----
+// 우선순위: 잠금 > 남기기 옵션 > 도감 새 조각 > 분해 규칙(중복 세트·약한 장비) > 등급별 자동 분해
+function hasKeepAff(it){const K=S.sort.keep;return K.length>0&&it.aff.some(a=>K.includes(a.k));}
+function setRival(it){for(const x of [...Object.values(S.eq),...S.inv]){if(!x||x===it||x.set!==it.set||x.slot!==it.slot)continue;
+  if(x.ilvl>it.ilvl||(x.ilvl===it.ilvl&&(Object.values(S.eq).includes(x)||x.id<it.id)))return x;}return null;}
+function salvReason(it,o){ // o.pickup: 주울 때(등급별 자동 분해 포함), o.fresh: 도감에 처음 들어온 조각
+  if(it.lock||hasKeepAff(it))return null;
+  if(it.set&&o.fresh)return null;
+  const R=S.sort;
+  if(R.dup&&it.set&&setRival(it))return 'dup';
+  if(R.weak&&!it.set&&RT.cs&&it.rarity<=(o.pickup?R.weakTo:2)&&upgradeScore(it)<1)return 'weak';
+  if(o.pickup&&it.rarity<3&&S.autoSalv[it.rarity])return 'grade';
+  return null;
+}
+// 가방 정리: 잠금·전설·남기기·세트 첫 조각은 손대지 않음 (전설은 「전설까지」여도 주울 때만 판정)
+function sortSweep(manual){
+  let n=0,m=0;const keep=[];
+  for(const it of S.inv){const r=it.rarity===3?null:salvReason(it,{pickup:false});if(r){n++;m+=salvVal(it);}else keep.push(it);}
+  S.inv=keep;S.stones+=m;
+  if(manual)toast(n?`정리: ${n}개 분해 · ◆${fmt(m)}`:'정리할 장비가 없습니다',1);else{RT.sortAgg.n+=n;RT.sortAgg.m+=m;}
+  if(n)dirty('equip','header','tabs');return n;
+}
+function sortTick(dt){RT.sortT+=dt;if(RT.sortT<30)return;RT.sortT=0;if(S.sort.on)sortSweep(false);
+  const A=RT.sortAgg;if(A.n){log(`<span style="color:#9fd8ff">자동 정리: ${A.n}개 분해, 마력석 +${fmt(A.m)}</span>`);A.n=0;A.m=0;}}
 function addLoot(it){
   lootBeam(it);
-  if(it.set){const fresh=!(S.setSeen[it.set]&&S.setSeen[it.set][it.slot]);markSeen(it);if(fresh)log(`<span class="c4">세트 도감에 새 조각: ${esc(SETS[it.set].n)} · ${SLOTMAP[it.slot].n}</span>`);}
+  let fresh=false;if(it.set){fresh=!(S.setSeen[it.set]&&S.setSeen[it.set][it.slot]);markSeen(it);if(fresh)log(`<span class="c4">세트 도감에 새 조각: ${esc(SETS[it.set].n)} · ${SLOTMAP[it.slot].n}</span>`);}
   if(tryAutoEquip(it))return;
-  if(it.rarity<3&&S.autoSalv[it.rarity]){S.stones+=salvVal(it);dirty('header');return;}
+  const why=salvReason(it,{pickup:true,fresh});
+  if(why){const v=salvVal(it);S.stones+=v;if(why!=='grade'){RT.sortAgg.n++;RT.sortAgg.m+=v;}dirty('header');return;}
   if(S.inv.length>=INV_MAX){S.stones+=salvVal(it);log(`가방이 가득 차 <span class="c${it.rarity}">${esc(it.name)}</span> 자동 분해`);dirty('header');return;}
   S.inv.push(it);dirty('equip','tabs');
   log(`획득: <span class="c${it.rarity}">${esc(it.name)}</span> <small>(${SLOTMAP[it.slot].n} · ${it.ilvl})</small>`);
@@ -538,7 +572,7 @@ function cast(id,L){
 function skillCd(id){let cd=SKMAP[id].cd;if(id==='whirl'&&RT.cs.legs.has('whirl'))cd-=2;return cd*RT.cs.cdMult;}
 
 function step(dt){
-  const C=RT.cs,H=RT.hero;S.stats.time+=dt;
+  const C=RT.cs,H=RT.hero;S.stats.time+=dt;sortTick(dt);
   RT.winT+=dt;if(RT.winT>=15){const r=RT.winK/RT.winT;S.killRate=S.killRate?S.killRate*0.7+r*0.3:r;RT.winT=0;RT.winK=0;}
   if(H.dead>0){H.dead-=dt;if(H.dead<=0){H.hp=C.hp;RT.spawnT=0.4;}return;}
   if(RT.wantBoss&&!RT.boss&&!alive().length)startBoss();
@@ -933,6 +967,17 @@ function setDiffHTML(c0,c1){let h='';
     for(const t of [2,4]){if(a<t&&b>=t)notes.push(`<b class="pos">${t}세트 효과 활성</b>`);if(a>=t&&b<t)notes.push(`<b class="neg">${t}세트 효과 해제</b>`);}
     h+=`<div><span class="c4">${SETS[id].n}</span><span>${a}/${N} → ${b}/${N} ${notes.join(' ')}</span></div>`;}
   return h;}
+function sortBoxHTML(){const R=S.sort;
+  const opt=i=>`<select data-act="ska" data-i="${i}"><option value="">(없음)</option>${Object.keys(AFF).map(k=>`<option value="${k}" ${R.keep[i]===k?'selected':''}>${AFF[k].n}${AFF[k].flat?' (고정)':' %'}</option>`).join('')}</select>`;
+  return `<div class="rules">
+    <div class="rl"><span>주울 때 바로 분해</span><span class="chk">${[0,1,2].map(r=>`<label><input type="checkbox" data-act="as" data-r="${r}" ${S.autoSalv[r]?'checked':''}> <span class="c${r}">${RNAME[r]}</span></label>`).join('')}</span></div>
+    <div class="rl"><label><input type="checkbox" data-act="sr" data-k="weak" ${R.weak?'checked':''}> 지금 장비보다 약하면 분해</label>
+      <select data-act="swt"><option value="2" ${R.weakTo===2?'selected':''}>희귀 이하만</option><option value="3" ${R.weakTo===3?'selected':''}>전설까지</option></select></div>
+    <div class="rl"><label><input type="checkbox" data-act="sr" data-k="dup" ${R.dup?'checked':''}> 중복 세트 조각 분해</label><small>같은 세트·부위를 더 높은 레벨로 가지면</small></div>
+    <div class="rl"><span>이 옵션이 붙으면 남기기</span><span>${opt(0)} ${opt(1)}</span></div>
+    <div class="rl"><label><input type="checkbox" data-act="sr" data-k="on" ${R.on?'checked':''}> <b>자동 정리</b> — 30초마다 가방에도 적용</label></div>
+    <p class="note" style="margin:2px 0 0">우선순위: 잠금 &gt; 남기기 옵션 &gt; 도감 새 조각 &gt; 분해 규칙 &gt; 등급별 분해. 가방 정리는 잠금·전설·남기기·세트 첫 조각을 건드리지 않습니다. 「약하면」 비교에는 전설 고유 효과가 들어가지 않습니다.</p>
+  </div>`;}
 function dexTotal(){return Object.values(SETS).reduce((a,s)=>a+s.parts.length,0);}
 function dexDone(){let n=0;for(const id in SETS)for(const p of SETS[id].parts)if(S.setSeen[id]&&S.setSeen[id][p])n++;return n;}
 function dexHTML(){return SET_BY_REGION.map(id=>{const SD=SETS[id],seen=S.setSeen[id]||{};const got=SD.parts.filter(p=>seen[p]).length;
@@ -991,7 +1036,7 @@ function renderPanel(){
     h+=`<h3>가방 <span class="r"><span class="${S.inv.length>=INV_MAX-4?'full':''}">${S.inv.length} / ${INV_MAX}</span> · ▲ 현재보다 강함</span></h3>
       <div class="row"><button data-act="sort">정렬</button><button class="pri" data-act="bestall" ${RT.upCount?'':'disabled'}>▲ 최선 장비 한 번에 장착</button></div>
       <div class="row"><small>일괄 분해(잠금 제외):</small>
-      <button data-act="bulk" data-r="0">일반</button><button data-act="bulk" data-r="1">마법</button><button data-act="bulk" data-r="2">희귀</button><button data-act="bulkdown">▲ 없는 것 전부</button><button data-act="setdup" title="세트·부위마다 가장 높은 레벨 하나만 남기고 분해">중복 세트 조각</button></div>
+      <button data-act="bulk" data-r="0">일반</button><button data-act="bulk" data-r="1">마법</button><button data-act="bulk" data-r="2">희귀</button><button data-act="bulkdown">▲ 없는 것 전부</button><button data-act="sortnow" title="정리 규칙(기록·설정 탭)대로 가방을 정리">규칙대로 정리</button><button data-act="setdup" title="세트·부위마다 가장 높은 레벨 하나만 남기고 분해">중복 세트 조각</button></div>
       <div class="filt">${[['all','전체'],['up','▲만'],['set','세트'],...SLOTS.map(s=>[s.id,s.n])].map(([k,n])=>`<button data-act="invf" data-f="${k}" class="${F===k?'on':''}">${n}${k==='up'&&RT.upCount?' '+RT.upCount:''}</button>`).join('')}</div>
       <div class="invgrid">`;
     if(F==='all')for(let i=0;i<INV_MAX;i++){const it=S.inv[i];h+=it?cardHTML(it,true):'<div class="card empty"></div>';}
@@ -1016,7 +1061,8 @@ function renderPanel(){
     P.innerHTML=h;
   }else{
     const st=S.stats,tm=Math.floor(st.time);
-    P.innerHTML=`<h3>기록</h3><div class="kv">
+    P.innerHTML=`<h3 id="sortbox" style="margin-top:0">정리 규칙 <span class="r"><button data-act="sortnow">지금 정리</button></span></h3>${sortBoxHTML()}
+      <h3>기록</h3><div class="kv">
       <span>플레이 시간</span><b>${Math.floor(tm/3600)}시간 ${Math.floor(tm%3600/60)}분</b>
       <span>처치한 적</span><b>${fmt(st.kills)}</b><span>처치한 보스</span><b>${fmt(st.bosses)}</b>
       <span>얻은 아이템</span><b>${fmt(st.items)}</b><span>얻은 전설</span><b class="c3">${fmt(st.legends)}</b><span>얻은 세트</span><b class="c4">${fmt(st.sets||0)}</b>
@@ -1025,9 +1071,6 @@ function renderPanel(){
       <h3>자동 장착</h3><div class="chk"><label><input type="checkbox" data-act="ae" ${S.autoEquip?'checked':''}> 주운 장비가 지금보다 5% 넘게 강하면 바로 장착</label></div>
       <p class="note" style="margin-top:2px">벗은 장비는 가방으로 갑니다. 세트 효과까지 따져서 비교하지만, 전설 고유 효과는 따지지 않습니다.</p>
       <h3>세트 도감 <span class="r">${dexDone()} / ${dexTotal()} 조각</span></h3><div class="dex">${dexHTML()}</div>
-      <h3>자동 분해</h3><div class="chk">
-      ${[0,1,2].map(r=>`<label><input type="checkbox" data-act="as" data-r="${r}" ${S.autoSalv[r]?'checked':''}> <span class="c${r}">${RNAME[r]}</span></label>`).join('')}
-      <span style="color:var(--dim);font-size:12px">전설과 세트는 자동 분해되지 않습니다.</span></div>
       <h3>게임 속도</h3><div class="row speed">${[1,2,3].map(s=>`<button data-act="speed" data-s="${s}" class="${S.speed===s?'on':''}">×${s}</button>`).join('')}</div>
       <h3>저장</h3><p class="note" style="margin-top:0">자동 저장은 이 브라우저에만 남습니다. 기기를 옮기거나 백업하려면 코드를 복사해 두세요.</p>
       <div class="row"><button data-act="export">저장 코드 복사</button><button data-act="import">코드 불러오기</button><button class="danger" data-act="wipe">처음부터 다시</button></div>
@@ -1094,6 +1137,7 @@ function panelAct(act,el){
   else if(act==='bestall'){let n=0;for(let pass=0;pass<14;pass++){let best=null,bs=1.01;for(const it of S.inv){const v=upgradeScore(it);if(v>bs){bs=v;best=it;}}
       if(!best)break;S.inv.splice(S.inv.indexOf(best),1);const old=S.eq[best.slot];S.eq[best.slot]=best;if(old)S.inv.push(old);recalc();n++;}
     if(n)toast(`${n}개 장착`,1);dirty('equip','tabs');}
+  else if(act==='sortnow'){sortSweep(true);}
   else if(act==='setdup'){const eqIl={},best={},K=it=>it.set+'/'+it.slot;
     for(const it of Object.values(S.eq))if(it&&it.set)eqIl[K(it)]=it.ilvl;
     for(const it of S.inv)if(it.set&&(!best[K(it)]||it.ilvl>best[K(it)].ilvl))best[K(it)]=it;
@@ -1115,6 +1159,9 @@ document.addEventListener('click',e=>{
   const tb=e.target.closest('#tabs button');if(tb){RT.tab=tb.dataset.tab;dirty('tabs','panel');return;}
 });
 document.addEventListener('change',e=>{const a=e.target.dataset&&e.target.dataset.act;if(a==='as'){S.autoSalv[+e.target.dataset.r]=e.target.checked;}
+  else if(a==='sr'){S.sort[e.target.dataset.k]=e.target.checked;if(e.target.dataset.k==='on'&&e.target.checked){toast('자동 정리를 켰습니다',1);RT.sortT=29;}}
+  else if(a==='swt'){S.sort.weakTo=+e.target.value;}
+  else if(a==='ska'){const i=+e.target.dataset.i,v=e.target.value;S.sort.keep[i]=v||undefined;S.sort.keep=[...new Set(S.sort.keep.filter(Boolean))].slice(0,2);dirty('settings');}
   else if(a==='ae'){S.autoEquip=e.target.checked;if(S.autoEquip)toast('자동 장착을 켰습니다',1);}});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
 $('#sPrev').onclick=()=>{if(S.stage>1){S.stage--;S.kills=0;RT.boss=false;RT.wantBoss=false;RT.enemies=[];recalc();dirty('stage');}};
