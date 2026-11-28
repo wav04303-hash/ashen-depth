@@ -121,6 +121,14 @@ select{font:inherit;font-size:12px;color:var(--text);background:var(--panel2);bo
 .li .t b{color:#f0d49a}
 .li .t p{margin:2px 0 0;font-size:12px;color:var(--dim)}
 .li.locked{opacity:.45}
+.tag{display:inline-block;font-size:10px;padding:0 5px;border:1px solid var(--line2);border-radius:8px;color:var(--dim);margin-left:2px;line-height:15px}
+.brrow{margin-top:6px;border-top:1px dashed #2a221a;padding-top:5px}
+.brrow.lockd{font-size:11px;color:#6a5d4c}
+.brlv{font-size:11px;color:var(--accent)}.brlv .new{color:#ffe3a6;background:#3a2a14;border-radius:6px;padding:0 5px;font-size:10px}
+.brops{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:4px;margin-top:3px}
+.bro{text-align:left;padding:4px 6px;display:flex;flex-direction:column;gap:1px}.bro b{font-size:12px;color:#e9ddc7}.bro small{font-size:10.5px;color:var(--dim);line-height:1.3}
+.bro.on{background:#2a2014;border-color:var(--accent)}.bro.on b{color:#ffe3a6}
+.brc{font-size:10px;color:var(--dim)}
 .slotbtns{display:flex;gap:3px}
 .slotbtns button{padding:3px 8px;font-size:12px}
 .slotbtns button.on{background:#3a2a14;border-color:var(--accent);color:#ffe3a6}
@@ -156,7 +164,7 @@ textarea{width:100%;height:80px;background:#0c0a08;color:var(--text);border:1px 
 <body>
 <div id="app">
   <header>
-    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.4.3</div></div>
+    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.5.0</div></div>
     <div class="res">
       <div class="lv">Lv <b id="lv">1</b></div>
       <div class="xpbar"><i id="xpf"></i><span id="xpt"></span></div>
@@ -297,18 +305,164 @@ function setCounts(eq){const c={};for(const k in eq){const it=eq[k];if(it&&it.se
 const RARE_A=['죽음의','폭풍의','핏빛','망자의','어둠의','혹한의','분노의','고대의','저주받은','별빛의','잿빛','몰락한'];
 const RNAME=['일반','마법','희귀','전설','세트'];
 const rk=it=>it.rarity===4?2.5:it.rarity; // 비용 계산용 등급 가중치
+// ================= 스킬 (v0.5) =================
+// 스킬마다 수치 묶음 p(피해 배율 mult, 재사용 cd, 타격 수 hits, 기절 stun, 화상 burn …)를 두고,
+// 실제 시전 때는 skP(id)가 [기본값 → 스킬 레벨 → 고른 갈래 → 전설 장비(legFx)] 순서로 수치를 바꿔 쓴다.
+// 갈래·전설·(7-2의) 보조 젬은 모두 같은 모양의 "수치 바꾸기" {k:키, add|mul|set}로 붙는다.
+// 전설 장비가 스킬을 바꾸는 법: LEG_FX[전설id] = [{skill:'whirl'|tag:'aoe'|branch:'pull', k:'hits', add:1}, …]
+const TAGN={atk:'공격',spell:'주문',single:'단일',aoe:'광역',melee:'근접',proj:'투사체',chain:'연쇄',fire:'화염',cold:'냉기',light:'번개',void:'공허',phys:'물리',dot:'지속',summon:'소환',heal:'회복',buff:'강화',stun:'기절',delay:'지연',guard:'방어'};
+const BR_LV=[5,15,30];
+const pc=v=>Math.round(v*100)+'%';
+const s1=v=>(+v.toFixed(1))+'';
 const SKILLS=[
-  {id:'smash',fx:{t:'impact',col:'#ffd27a'},n:'강타',lv:1,cd:4,d:p=>`가장 앞의 적에게 공격력 ${Math.round(300*p)}% 피해`},
-  {id:'whirl',fx:{t:'spin',col:'#f0e2c8'},n:'회전베기',lv:3,cd:6,d:p=>`모든 적에게 공격력 ${Math.round(150*p)}% 피해`},
-  {id:'chain',fx:{t:'bolt',col:'#7cc4f0'},n:'번개 사슬',lv:6,cd:5,d:p=>`무작위 적에게 3회 튀며 각각 공격력 ${Math.round(120*p)}% 피해`},
-  {id:'frost',fx:{t:'nova',col:'#8fd8ff'},n:'서리 고리',lv:10,cd:10,d:p=>`모든 적에게 공격력 ${Math.round(100*p)}% 피해, 4초간 적 공격 속도 40% 감소`},
-  {id:'blood',fx:{t:'heal',col:'#d2493a'},n:'피의 서약',lv:14,cd:15,d:(p,L)=>`생명력 60% 이하일 때 최대 생명력의 ${30+2*(L-1)}% 회복`},
-  {id:'cry',fx:{t:'shout',col:'#ffb35c'},n:'전투 함성',lv:18,cd:20,d:(p,L)=>`8초간 모든 피해 +${50+5*(L-1)}%`},
-  {id:'execute',fx:{t:'xslash',col:'#ff9d5c'},n:'처형',lv:24,cd:8,d:p=>`생명력 비율이 가장 낮은 적에게 공격력 ${Math.round(500*p)}% 피해 (30% 이하면 2배)`},
+  {id:'smash',n:'강타',lv:1,cd:4,tags:['atk','single','melee','phys'],fx:{t:'impact',col:'#ffd27a'},
+    p:{mult:3,hits:1,stun:0,splash:0,after:0},
+    d:P=>`가장 앞의 적에게 공격력 ${pc(P.mult)} 피해${P.hits>1?` ×${P.hits}회`:''}${P.splash?`, 나머지 적에게 그 ${pc(P.splash)}`:''}${P.stun?`, ${s1(P.stun)}초 기절`:''}${P.after?`, 1초 뒤 여진으로 모든 적에게 공격력 ${pc(P.after)}`:''}`,
+    br:[[{id:'quake',n:'대지 진동',d:'나머지 적에게도 피해의 30%',m:[{k:'splash',add:.3}]},
+         {id:'stunner',n:'기절 일격',d:'1초 기절',m:[{k:'stun',add:1}]},
+         {id:'twin',n:'연타',d:'두 번 내려침 (한 번에 60%)',m:[{k:'hits',add:1},{k:'mult',mul:.6}]}],
+        [{id:'crush',n:'갑옷 파쇄',d:'피해 +30%',m:[{k:'mult',mul:1.3}]},
+         {id:'quick',n:'재빠른 강타',d:'재사용 대기시간 -1.5초',m:[{k:'cd',add:-1.5}]}],
+        [{id:'giant',n:'거인의 일격',d:'피해 +60%',m:[{k:'mult',mul:1.6}]},
+         {id:'after',n:'여진',d:'1초 뒤 모든 적에게 공격력 250%',m:[{k:'after',add:2.5}],fxcol:'#ff9a3a'}]]},
+  {id:'whirl',n:'회전베기',lv:3,cd:6,tags:['atk','aoe','melee','phys'],fx:{t:'spin',col:'#f0e2c8'},
+    p:{mult:1.7,hits:1,stun:0,leech:0},
+    d:P=>`모든 적에게 공격력 ${pc(P.mult)} 피해${P.hits>1?` ×${P.hits}바퀴`:''}${P.stun?`, 끌어모아 ${s1(P.stun)}초 기절`:''}${P.leech?`, 준 피해의 ${pc(P.leech)} 회복`:''}`,
+    br:[[{id:'pull',n:'흡입',d:'적을 끌어모아 0.8초 기절, 피해 +15%',m:[{k:'stun',add:.8},{k:'mult',mul:1.15}]},
+         {id:'widen',n:'확산',d:'더 크게 휘둘러 피해 +40%',m:[{k:'mult',mul:1.4}]},
+         {id:'double',n:'연속',d:'두 바퀴 회전',m:[{k:'hits',add:1},{k:'mult',mul:.75}]}],
+        [{id:'bloodspin',n:'피의 회전',d:'준 피해의 4% 회복',m:[{k:'leech',add:.04}],fxcol:'#ff6a5a'},
+         {id:'gale',n:'칼바람',d:'재사용 대기시간 -2초',m:[{k:'cd',add:-2}]}],
+        [{id:'vortex',n:'소용돌이',d:'한 바퀴 더',m:[{k:'hits',add:1}]},
+         {id:'steel',n:'강철 폭풍',d:'피해 +50%',m:[{k:'mult',mul:1.5}]}]]},
+  {id:'chain',n:'번개 사슬',lv:6,cd:5,tags:['spell','chain','proj','light'],fx:{t:'bolt',col:'#7cc4f0'},
+    p:{mult:1.2,hits:3,stun:0,lastx2:0},
+    d:P=>`무작위 적에게 ${P.hits}번 튀며 각각 공격력 ${pc(P.mult)} 피해${P.lastx2?' (마지막 타격 2배)':''}${P.stun?`, 맞은 적 ${s1(P.stun)}초 감전`:''}`,
+    br:[[{id:'overload',n:'과부하',d:'피해 +30%',m:[{k:'mult',mul:1.3}],fxcol:'#c9a0ff'},
+         {id:'fork',n:'분기',d:'2번 더 튐 (한 번에 70%)',m:[{k:'hits',add:2},{k:'mult',mul:.7}]},
+         {id:'shock',n:'감전',d:'맞은 적 0.4초 기절',m:[{k:'stun',add:.4}]}],
+        [{id:'conduct',n:'폭풍 전도',d:'재사용 대기시간 -1.5초',m:[{k:'cd',add:-1.5}]},
+         {id:'charge',n:'축전',d:'마지막 타격 2배',m:[{k:'lastx2',set:1}]}],
+        [{id:'thunder',n:'천둥 신',d:'3번 더 튐',m:[{k:'hits',add:3}]},
+         {id:'surge',n:'번개 폭주',d:'피해 +60%',m:[{k:'mult',mul:1.6}]}]]},
+  {id:'frost',n:'서리 고리',lv:10,cd:10,tags:['spell','aoe','cold'],fx:{t:'nova',col:'#8fd8ff'},
+    p:{mult:2.5,hits:1,slow:4,stun:0,guard:0},
+    d:P=>`모든 적에게 공격력 ${pc(P.mult)} 피해${P.hits>1?` ×${P.hits}`:''}, ${s1(P.slow)}초간 적 공격 속도 40% 감소${P.stun?`, ${s1(P.stun)}초 빙결`:''}${P.guard?`, 4초간 받는 피해 -${pc(P.guard)}`:''}`,
+    br:[[{id:'freeze',n:'빙결',d:'적을 1초 얼림',m:[{k:'stun',add:1}],fxcol:'#e8faff'},
+         {id:'chill',n:'한파',d:'둔화 +3초',m:[{k:'slow',add:3}]},
+         {id:'shard',n:'얼음 칼날',d:'피해 +60%',m:[{k:'mult',mul:1.6}]}],
+        [{id:'icearmor',n:'서리 갑옷',d:'4초간 받는 피해 -30%',m:[{k:'guard',add:.3}]},
+         {id:'rapidcold',n:'연속 냉기',d:'재사용 대기시간 -3초',m:[{k:'cd',add:-3}]}],
+        [{id:'zero',n:'절대 영도',d:'빙결 +1.5초, 피해 +30%',m:[{k:'stun',add:1.5},{k:'mult',mul:1.3}]},
+         {id:'blizzard',n:'눈보라',d:'두 번 몰아침',m:[{k:'hits',add:1}]}]]},
+  {id:'blood',sup:1,n:'피의 서약',lv:14,cd:15,tags:['spell','heal'],fx:{t:'heal',col:'#d2493a'},
+    p:{heal:.3,gate:.6,guard:0,regen:0},lvl:(P,L)=>{P.heal+=.02*(L-1);},
+    d:P=>`생명력 ${pc(P.gate)} 이하일 때 최대 생명력의 ${pc(P.heal)} 회복${P.guard?`, 5초간 받는 피해 -${pc(P.guard)}`:''}${P.regen?`, 5초간 초당 ${pc(P.regen)} 회복`:''}`,
+    br:[[{id:'early',n:'응급 서약',d:'80% 이하에서 발동',m:[{k:'gate',set:.8}]},
+         {id:'deep',n:'깊은 서약',d:'회복량 +15%p',m:[{k:'heal',add:.15}]},
+         {id:'bshield',n:'피의 보호막',d:'5초간 받는 피해 -30%',m:[{k:'guard',add:.3}]}],
+        [{id:'regen',n:'재생',d:'5초간 초당 4% 회복',m:[{k:'regen',add:.04}]},
+         {id:'fastoath',n:'빠른 서약',d:'재사용 대기시간 -5초',m:[{k:'cd',add:-5}]}]]},
+  {id:'cry',sup:1,n:'전투 함성',lv:18,cd:20,tags:['buff'],fx:{t:'shout',col:'#ffb35c'},
+    p:{dur:8,val:.5,stun:0,leech:0},lvl:(P,L)=>{P.val+=.05*(L-1);},
+    d:P=>`${s1(P.dur)}초간 모든 피해 +${pc(P.val)}${P.stun?`, 모든 적 ${s1(P.stun)}초 기절`:''}${P.leech?`, 그동안 준 피해의 ${pc(P.leech)} 회복`:''}`,
+    br:[[{id:'long',n:'긴 함성',d:'지속 +4초',m:[{k:'dur',add:4}]},
+         {id:'rage',n:'격노',d:'피해 증가 +25%p',m:[{k:'val',add:.25}]},
+         {id:'terror',n:'위협',d:'모든 적 1.5초 기절',m:[{k:'stun',add:1.5}]}],
+        [{id:'drums',n:'전장의 북',d:'재사용 대기시간 -6초',m:[{k:'cd',add:-6}]},
+         {id:'bloodcry',n:'피의 함성',d:'함성 동안 준 피해의 3% 회복',m:[{k:'leech',add:.03}]}]]},
+  {id:'execute',n:'처형',lv:24,cd:8,tags:['atk','single','melee','phys'],fx:{t:'xslash',col:'#ff9d5c'},
+    p:{mult:5,thresh:.3,execx:2,targets:1,reset:0,bossMult:1},
+    d:P=>`생명력 비율이 가장 낮은 적${P.targets>1?` ${P.targets}명`:''}에게 공격력 ${pc(P.mult)} 피해 (${pc(P.thresh)} 이하면 ${P.execx}배)${P.bossMult>1?`, 보스에게 +${pc(P.bossMult-1)}`:''}${P.reset?', 처치하면 곧바로 다시 사용':''}`,
+    br:[[{id:'guillotine',n:'단두대',d:'50% 이하부터 2배',m:[{k:'thresh',set:.5}]},
+         {id:'confirm',n:'확인 사살',d:'처치하면 재사용 대기시간 초기화',m:[{k:'reset',set:1}]},
+         {id:'twinexec',n:'연쇄 처형',d:'두 번째로 약한 적도 벰 (한 명당 70%)',m:[{k:'targets',add:1},{k:'mult',mul:.7}]}],
+        [{id:'sentence',n:'사형 선고',d:'피해 +40%',m:[{k:'mult',mul:1.4}]},
+         {id:'judge',n:'집행자의 눈',d:'보스에게 피해 +50%',m:[{k:'bossMult',mul:1.5}]}]]},
+  {id:'leap',n:'도약 강타',lv:28,cd:9,tags:['atk','aoe','melee','stun'],fx:{t:'impact',col:'#ffe08a'},
+    p:{mult:2.2,hits:1,stun:1.5,guard:0},
+    d:P=>`뛰어올라 모든 적에게 공격력 ${pc(P.mult)} 피해${P.hits>1?` ×${P.hits}`:''}, ${s1(P.stun)}초 기절${P.guard?`, 3초간 받는 피해 -${pc(P.guard)}`:''}`,
+    br:[[{id:'quake2',n:'지진',d:'기절 +1초',m:[{k:'stun',add:1}]},
+         {id:'high',n:'높이 도약',d:'피해 +50%',m:[{k:'mult',mul:1.5}]},
+         {id:'shock2',n:'충격파',d:'두 번 내려찍음',m:[{k:'hits',add:1},{k:'mult',mul:.7}]}],
+        [{id:'releap',n:'재도약',d:'재사용 대기시간 -3초',m:[{k:'cd',add:-3}]},
+         {id:'earth',n:'대지의 힘',d:'착지 후 3초간 받는 피해 -20%',m:[{k:'guard',add:.2}]}]]},
+  {id:'vamp',n:'흡혈 일격',lv:32,cd:7,tags:['atk','single','melee','heal'],fx:{t:'xslash',col:'#d2304a'},
+    p:{mult:4,leech:.5,cap:.15,targets:1},
+    d:P=>`${P.targets>1?'모든 적':'가장 앞의 적'}에게 공격력 ${pc(P.mult)} 피해, 준 피해의 ${pc(P.leech)} 회복 (최대 생명력의 ${pc(P.cap)}까지)`,
+    br:[[{id:'thirst',n:'갈증',d:'회복 비율 +30%p',m:[{k:'leech',add:.3}]},
+         {id:'bblade',n:'피의 칼날',d:'피해 +50%',m:[{k:'mult',mul:1.5}]},
+         {id:'wave',n:'흡혈 파동',d:'모든 적을 벰 (한 명당 60%)',m:[{k:'targets',set:9},{k:'mult',mul:.6}]}],
+        [{id:'overflow',n:'과다 흡수',d:'회복 상한 30%',m:[{k:'cap',set:.3}]},
+         {id:'fastvamp',n:'빠른 흡혈',d:'재사용 대기시간 -2.5초',m:[{k:'cd',add:-2.5}]}]]},
+  {id:'fire',n:'화염 폭발',lv:36,cd:9,tags:['spell','aoe','fire','dot'],fx:{t:'burst',col:'#ff7a2a'},
+    p:{mult:1.5,burn:.4,burnT:4,spread:0},lvl:(P,L)=>{P.burn*=1+0.15*(L-1);},
+    d:P=>`모든 적에게 공격력 ${pc(P.mult)} 피해, ${s1(P.burnT)}초간 초당 공격력 ${pc(P.burn)} 화상${P.spread?', 불탄 적이 죽으면 화상이 옮겨붙음':''}`,
+    br:[[{id:'inferno',n:'업화',d:'화상 +60%',m:[{k:'burn',mul:1.6}],fxcol:'#ff4a1a'},
+         {id:'blast',n:'대폭발',d:'폭발 피해 +50%',m:[{k:'mult',mul:1.5}]},
+         {id:'embers',n:'잔불',d:'화상 +4초',m:[{k:'burnT',add:4}]}],
+        [{id:'spread',n:'불씨 퍼짐',d:'처치 시 화상이 옮겨붙음',m:[{k:'spread',set:1}]},
+         {id:'kindle',n:'연소 가속',d:'재사용 대기시간 -3초',m:[{k:'cd',add:-3}]}]]},
+  {id:'storm',n:'칼날 폭풍',lv:40,cd:14,tags:['atk','aoe','melee','dot'],fx:{t:'spin',col:'#c8d0dc'},
+    p:{dur:6,tick:.5,mult:.4,guard:0},
+    d:P=>`${s1(P.dur)}초 동안 ${s1(P.tick)}초마다 모든 적에게 공격력 ${pc(P.mult)} 피해${P.guard?`, 그동안 받는 피해 -${pc(P.guard)}`:''}`,
+    br:[[{id:'longstorm',n:'긴 폭풍',d:'지속 +2초',m:[{k:'dur',add:2}]},
+         {id:'sharp',n:'날카로운 바람',d:'피해 +30%',m:[{k:'mult',mul:1.3}]},
+         {id:'fastspin',n:'빠른 회전',d:'0.38초마다 벰',m:[{k:'tick',set:.38}]}],
+        [{id:'eye',n:'폭풍의 눈',d:'폭풍 동안 받는 피해 -20%',m:[{k:'guard',add:.2}]},
+         {id:'afterwind',n:'잔풍',d:'재사용 대기시간 -4초',m:[{k:'cd',add:-4}]}]]},
+  {id:'fissure',n:'대지 균열',lv:45,cd:10,tags:['spell','aoe','phys'],fx:{t:'crack',col:'#c89a5a'},
+    p:{mult:2.5,grow:.5,stun:0,burn:0,burnT:3},
+    d:P=>`땅을 갈라 앞에서부터 차례로 공격력 ${pc(P.mult)} 피해, 뒤의 적일수록 +${pc(P.grow)}씩 더 큼${P.stun?`, ${s1(P.stun)}초 기절`:''}${P.burn?`, ${s1(P.burnT)}초간 초당 ${pc(P.burn)} 화상`:''}`,
+    br:[[{id:'deepcrack',n:'깊은 균열',d:'피해 +30%',m:[{k:'mult',mul:1.3}]},
+         {id:'split',n:'갈라지는 땅',d:'뒤로 갈수록 +40%p 더',m:[{k:'grow',add:.4}]},
+         {id:'rubble',n:'잔해',d:'1초 기절',m:[{k:'stun',add:1}]}],
+        [{id:'lavacrack',n:'용암 균열',d:'3초간 초당 50% 화상',m:[{k:'burn',add:.5}],fxcol:'#ff7a2a'},
+         {id:'quickcrack',n:'빠른 균열',d:'재사용 대기시간 -3초',m:[{k:'cd',add:-3}]}]]},
+  {id:'clone',n:'그림자 분신',lv:50,cd:20,tags:['spell','summon','void'],fx:{t:'puff',col:'#9a6ad8'},
+    p:{dur:10,rate:.8,mult:.8,count:1,leech:0},
+    d:P=>`그림자 분신 ${P.count}명을 ${s1(P.dur)}초 불러냄. 분신은 ${s1(P.rate)}초마다 공격력 ${pc(P.mult)} 피해${P.leech?`, 준 피해의 ${pc(P.leech)} 회복`:''}`,
+    br:[[{id:'twins',n:'쌍둥이',d:'분신 2명 (한 명당 65%)',m:[{k:'count',add:1},{k:'mult',mul:.65}]},
+         {id:'dark',n:'짙은 그림자',d:'분신 피해 +50%',m:[{k:'mult',mul:1.5}]},
+         {id:'linger',n:'끈질긴 그림자',d:'지속 +6초',m:[{k:'dur',add:6}]}],
+        [{id:'shadowleech',n:'그림자 흡혈',d:'분신 피해의 10% 회복',m:[{k:'leech',add:.1}]},
+         {id:'fastsummon',n:'빠른 소환',d:'재사용 대기시간 -6초',m:[{k:'cd',add:-6}]}]]},
+  {id:'shield',sup:1,n:'방패 돌진',lv:55,cd:12,tags:['atk','single','melee','guard'],fx:{t:'bash',col:'#9fd0ff'},
+    p:{mult:3,knock:1.5,knockAll:0,guard:.3,guardT:4,refl:0},
+    d:P=>`가장 앞의 적에게 공격력 ${pc(P.mult)} 피해, ${P.knockAll?'모든 적':'그 적'}을 밀쳐 공격 ${s1(P.knock)}초 늦춤, ${s1(P.guardT)}초간 받는 피해 -${pc(P.guard)}${P.refl?`, 그동안 받은 피해의 ${pc(P.refl)} 반사`:''}`,
+    br:[[{id:'wall',n:'철벽',d:'받는 피해 감소 +20%p',m:[{k:'guard',add:.2}]},
+         {id:'shove',n:'밀쳐내기',d:'모든 적을 밀침',m:[{k:'knockAll',set:1}]},
+         {id:'charge2',n:'돌격',d:'피해 +60%',m:[{k:'mult',mul:1.6}]}],
+        [{id:'longguard',n:'긴 방어',d:'방어 +3초',m:[{k:'guardT',add:3}]},
+         {id:'counter',n:'반격 자세',d:'방어 중 받은 피해의 50% 반사',m:[{k:'refl',add:.5}]}]]},
+  {id:'rift',n:'공허 균열',lv:60,cd:12,tags:['spell','aoe','void','delay'],fx:{t:'rift',col:'#b06aff'},
+    p:{mult:4,delay:1.5,count:1,leech:0},
+    d:P=>`${s1(P.delay)}초 뒤 터지는 균열${P.count>1?` ${P.count}개`:''}: 모든 적에게 공격력 ${pc(P.mult)} 피해${P.leech?`, 준 피해의 ${pc(P.leech)} 회복`:''}`,
+    br:[[{id:'tworift',n:'이중 균열',d:'균열 2개 (한 개당 60%)',m:[{k:'count',add:1},{k:'mult',mul:.6}]},
+         {id:'collapse',n:'공허 붕괴',d:'피해 +40%',m:[{k:'mult',mul:1.4}]},
+         {id:'quickrift',n:'빠른 폭발',d:'0.6초 만에 터짐, 피해 +15%',m:[{k:'delay',set:.6},{k:'mult',mul:1.15}]}],
+        [{id:'devour',n:'공허 흡수',d:'준 피해의 3% 회복',m:[{k:'leech',add:.03}]},
+         {id:'riftchain',n:'균열 연쇄',d:'재사용 대기시간 -3초',m:[{k:'cd',add:-3}]}]]},
 ];
-// 스킬 이펙트는 fx.t(그리는 방식, FXR의 키)와 fx.col(색)로 고른다
-function skFx(id,o){const F=SKMAP[id].fx;RT.fx.push(Object.assign({k:F.t,col:F.col,life:1},o));}
 const SKMAP=Object.fromEntries(SKILLS.map(s=>[s.id,s]));
+// 전설 장비가 스킬을 바꾸는 방법 (지금 있는 전설 2종을 이 방식으로 옮김. 스킬 전용 전설은 여기에 더하면 됨)
+const LEG_FX={
+  chain:[{skill:'chain',k:'hits',add:2}],
+  whirl:[{skill:'whirl',k:'mult',mul:2},{skill:'whirl',k:'cd',add:-2}],
+};
+const MAX_SLOTS=5;
+const slotCount=()=>S.lvl>=40?5:S.lvl>=20?4:3;
+function skP(id){const sk=SKMAP[id],L=S.skills[id]||1,P=Object.assign({cd:sk.cd},sk.p);
+  if('mult' in P)P.mult*=1+0.15*(L-1);if(sk.lvl)sk.lvl(P,L);
+  const ch=(S.br&&S.br[id])||[],mods=[];
+  (sk.br||[]).forEach((tier,ti)=>{const o=tier.find(x=>x.id===ch[ti]);if(o&&L>=BR_LV[ti]){mods.push(...o.m);if(o.fxcol)P.fxcol=o.fxcol;}});
+  const lf=RT.cs&&RT.cs.legFx;if(lf)for(const f of lf)if(f.skill===id||(f.tag&&sk.tags.includes(f.tag))||(f.branch&&ch.includes(f.branch)))mods.push(f);
+  for(const m of mods){if(m.set!==undefined)P[m.k]=m.set;if(m.add)P[m.k]=(P[m.k]||0)+m.add;if(m.mul)P[m.k]=(P[m.k]||0)*m.mul;}
+  return P;}
+function skillCd(id){return Math.max(1,skP(id).cd)*RT.cs.cdMult;}
+function skFx(id,o){const F=SKMAP[id].fx;RT.fx.push(Object.assign({k:F.t,col:F.col,life:1},o));}
+// 갈래를 바꾸는 비용(마력석). 처음 고를 때는 무료.
+const brCost=ti=>10*(ti+1);
 const TALENTS=[
   {id:'str',n:'힘',d:'공격력 +4%',max:25,k:'atkPct',v:4},
   {id:'vit',n:'체력',d:'생명력 +5%',max:25,k:'hpPct',v:5},
@@ -341,7 +495,7 @@ function stageName(st){const t=Math.floor((st-1)/60);return `${region(st).n}${t?
 const SAVE_KEY='ashen_depths_v1';
 function newState(){return{
   v:1,lvl:1,xp:0,gold:0,stones:0,stage:1,maxStage:1,kills:0,autoPush:true,
-  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null],
+  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null,null],br:{},
   autoSalv:[true,false,false],speed:1,autoEquip:false,setSeen:{},sort:sortDefault(),
   stats:{kills:0,legends:0,sets:0,deaths:0,bosses:0,time:0,items:0},
   killRate:0,last:Date.now()
@@ -349,7 +503,7 @@ function newState(){return{
 let S=newState();
 const RT={enemies:[],hero:{hp:1,atkT:0,dead:0,anim:0,hit:0},cds:{},cry:0,cryV:0,slowT:0,
   boss:false,bossT:0,spawnT:.6,fx:[],texts:[],log:[],dirty:{},deathStreak:0,winK:0,winT:0,cs:null,tab:'equip',selId:null,flash:0,
-  shake:0,lastKillX:.72,invF:'all',upCount:0,sortT:0,sortAgg:{n:0,m:0}};
+  shake:0,lastKillX:.72,pend:[],storm:{t:0},clones:[],guard:{red:0,t:0,refl:0},regenB:{t:0,rate:0},wait:{},cryLeech:0,resetNow:null,invF:'all',upCount:0,sortT:0,sortAgg:{n:0,m:0}};
 function dirty(...k){k.forEach(x=>RT.dirty[x]=1);}
 
 function save(){S.last=Date.now();try{localStorage.setItem(SAVE_KEY,JSON.stringify(S));}catch(e){}}
@@ -365,7 +519,8 @@ function applySave(o){
   S.sort=Object.assign(sortDefault(),o.sort||{});if(!Array.isArray(S.sort.keep))S.sort.keep=[];S.sort.keep=S.sort.keep.filter(k=>AFF[k]).slice(0,2);
   // v0.3 이전 저장: 지금 가진 세트 조각을 도감에 채워 넣음
   for(const it of [...Object.values(S.eq),...S.inv])if(it&&it.set)markSeen(it);
-  while(S.slots.length<4)S.slots.push(null);
+  while(S.slots.length<MAX_SLOTS)S.slots.push(null);S.slots=S.slots.slice(0,MAX_SLOTS).map(x=>x&&SKMAP[x]?x:null);
+  if(!S.br||typeof S.br!=='object')S.br={};
 }
 
 // ================= 능력치 =================
@@ -382,6 +537,7 @@ function calc(eq){
   const sets=setCounts(eq),f={dmgTaken:1,reflect:0,critHeal:0,bossTime:0,cdReset:0,bossReset:false,leechMult:1,killHeal:0,blast:0};
   for(const id in sets)for(const tier of [2,4])if(sets[id]>=tier)SETS[id].bonus[tier].apply(t,f);
   const c={legs,sets};Object.assign(c,f);
+  c.legFx=[];for(const k of legs)if(LEG_FX[k])c.legFx.push(...LEG_FX[k]);
   c.hp=(80+S.lvl*4+t.hp)*(1+t.hpPct/100);if(legs.has('giant'))c.hp*=1.3;
   c.atk=(5+S.lvl*0.5+t.atk)*(1+t.atkPct/100);if(legs.has('giant'))c.atk+=c.hp*0.03;
   c.armor=t.armor*(1+t.armorPct/100);
@@ -509,13 +665,14 @@ function dealDmg(e,base,skill){
     if(C.legs.has('critstorm'))for(const k in RT.cds)RT.cds[k]=Math.max(0,RT.cds[k]-0.2);
     if(C.critHeal)H.hp=Math.min(C.hp,H.hp+C.hp*C.critHeal);}
   d*=R(.92,1.08);e.hp-=d;e.flash=0.12;
-  if(C.leech>0)H.hp=Math.min(C.hp,H.hp+Math.min(d*C.leech/100,C.hp*0.08));
+  const lf=C.leech+(RT.cry>0?RT.cryLeech*100:0);if(lf>0)H.hp=Math.min(C.hp,H.hp+Math.min(d*lf/100,C.hp*0.08));
   text(e.x,e.y-0.2,fmt(d)+(crit?'!':''),crit?'#ffd65c':skill?'#9fd8ff':'#f2e8d8',crit?17:13);
   if(!e.boss&&e.hp>0&&C.legs.has('executioner')&&e.hp<e.max*0.15){e.hp=0;text(e.x,e.y-0.3,'처형','#ff8a3d',14);}
   if(e.hp<=0)kill(e);
 }
 function kill(e){
   e.dead=true;const st=S.stage,s=sc(st),C=RT.cs;RT.lastKillX=e.x;
+  if(e.burn&&e.burn.spread&&e.burn.t>0)alive().forEach(x=>burnE(x,e.burn.frac,e.burn.t,true));
   RT.fx.push({k:'puff',x:e.x,y:e.y,col:region(st).col,r:e.boss?0.16:0.07,life:1});if(e.boss)RT.shake=Math.max(RT.shake,0.5);
   if(C.killHeal&&RT.hero.dead<=0){const h=C.hp*C.killHeal;RT.hero.hp=Math.min(C.hp,RT.hero.hp+h);}
   S.stats.kills++;RT.winK++;
@@ -552,33 +709,83 @@ function gainXp(x){S.xp+=x;let up=false;
   if(up){recalc();RT.hero.hp=RT.cs.hp;dirty('talents','tabs');}
 }
 const xpNeed=l=>Math.floor(20*Math.pow(1.17,l-1)+l*10);
-const slotCount=()=>S.lvl>=20?4:3;
 function startBoss(){if(RT.boss||S.stage<S.maxStage)return;RT.boss=true;RT.wantBoss=false;RT.enemies=[];RT.spawnT=0.4;log(`<span style="color:#ff9d8a">보스 도전 — ${BOSSES[regionIdx(S.stage)]}</span>`);dirty('stage');}
 function heroDie(){
-  const H=RT.hero;H.dead=2.5;H.hp=0;S.stats.deaths++;RT.deathStreak++;
+  const H=RT.hero;H.dead=2.5;H.hp=0;S.stats.deaths++;RT.deathStreak++;resetSkillFx();
   if(RT.boss){RT.boss=false;log('<span style="color:#ff8b7d">보스 도전 실패. 다시 사냥을 시작합니다.</span>');}
   else log('<span style="color:#ff8b7d">쓰러졌습니다…</span>');
   S.kills=0;RT.enemies=[];RT.wantBoss=false;
   if(S.autoPush&&RT.deathStreak>=2&&S.stage>1){S.stage--;RT.deathStreak=0;log(`한 단계 후퇴: ${stageName(S.stage)}`);recalc();}
   dirty('stage');
 }
-function cast(id,L){
-  const C=RT.cs,H=RT.hero,en=alive(),p=1+0.15*(L-1),sk=SKMAP[id];
+// ---- 스킬 시전 (v0.5) ----
+function healHero(h){const H=RT.hero,C=RT.cs;if(h>0&&H.dead<=0)H.hp=Math.min(C.hp,H.hp+h);}
+function setGuard(red,t,refl){const g=RT.guard;RT.guard={red:Math.max(red,g.t>0?g.red:0),t:Math.max(t,g.t),refl:Math.max(refl||0,g.t>0?g.refl:0)};}
+function burnE(e,frac,t,spread){if(!e||e.dead||frac<=0)return;const dps=RT.cs.atk*frac*(1+RT.cs.skillDmg/100);
+  if(!e.burn||e.burn.t<=0||e.burn.dps<dps)e.burn={dps,t,frac,spread:!!spread};else{e.burn.t=Math.max(e.burn.t,t);e.burn.spread=e.burn.spread||!!spread;}}
+// 한 대 때리고 부가 효과(기절·화상·밀침)를 붙임. 실제로 깎은 생명력을 돌려줌(흡혈 계산용)
+function hitE(e,dmg,P){if(!e||e.dead)return 0;const before=Math.max(0,e.hp);dealDmg(e,dmg,true);
+  if(P){if(P.stun&&!e.dead)e.stun=Math.max(e.stun||0,P.stun);if(P.burn)burnE(e,P.burn,P.burnT||3,P.spread);if(P.knock&&!e.dead)e.atkT+=P.knock;}
+  return before-Math.max(0,e.dead?0:e.hp);}
+// 언제 쓸지: 회복은 생명력 기준, 처형은 약한 적이 있거나 보스일 때, 광역은 거의 죽은 적 하나에 낭비하지 않음, 지속형은 겹쳐 쓰지 않음
+function wantCast(id,P,en){const H=RT.hero,C=RT.cs,sk=SKMAP[id];
+  if(id==='blood')return H.hp<=C.hp*P.gate;
+  if(!en.length)return false;
+  const boss=en.some(e=>e.boss),w=RT.wait[id]||0;
+  if(id==='execute')return boss||en.some(e=>e.hp/e.max<P.thresh)||w>3;
+  if(id==='storm'&&RT.storm.t>0)return false;
+  if(id==='clone'&&RT.clones.length)return false;
+  if(id==='shield'&&RT.guard.t>1&&!boss)return false;
+  if(sk.tags.includes('aoe')&&!boss&&en.length===1&&en[0].hp/en[0].max<.35&&w<2)return false;
+  return true;}
+function cast(id){
+  const C=RT.cs,H=RT.hero,en=alive(),P=skP(id),sk=SKMAP[id],col=P.fxcol||sk.fx.col,A=C.atk,front=en[0];
+  const fx=(o,k)=>RT.fx.push(Object.assign({k:k||sk.fx.t,col,life:1},o));
+  if(!en.length&&id!=='blood')return false;
   switch(id){
-    case 'smash':{const e=en[0];if(!e)return false;dealDmg(e,C.atk*3*p,true);skFx(id,{x:e.x,y:e.y-.08});break;}
-    case 'whirl':{if(!en.length)return false;const m=1.5*p*(C.legs.has('whirl')?2:1);en.forEach(e=>dealDmg(e,C.atk*m,true));skFx(id,{x:HX,y:HY-.02,r:.22});break;}
-    case 'chain':{if(!en.length)return false;const hits=3+(C.legs.has('chain')?2:0);const pts=[{x:HX,y:HY-.1}];
-      for(let i=0;i<hits;i++){const a=alive();if(!a.length)break;const e=pick(a);pts.push({x:e.x,y:e.y-.08});dealDmg(e,C.atk*1.2*p,true);}
-      skFx(id,{pts});break;}
-    case 'frost':{if(!en.length)return false;en.forEach(e=>dealDmg(e,C.atk*p,true));RT.slowT=4;skFx(id,{x:.73,y:.74,r:.3});break;}
-    case 'blood':{if(H.hp>C.hp*0.6)return false;const h=C.hp*(0.3+0.02*(L-1));H.hp=Math.min(C.hp,H.hp+h);text(HX,HY-.25,'+'+fmt(h),'#74d083',15);skFx(id,{x:HX,y:HY-.08});break;}
-    case 'cry':{if(!en.length)return false;RT.cry=8;RT.cryV=0.5+0.05*(L-1);text(HX,HY-.3,'전투 함성!','#ffb35c',14);skFx(id,{x:HX+.03,y:HY-.1});break;}
-    case 'execute':{if(!en.length)return false;const e=en.slice().sort((a,b)=>a.hp/a.max-b.hp/b.max)[0];const m=5*p*(e.hp/e.max<0.3?2:1);
-      skFx(id,{x:e.x,y:e.y-.04});dealDmg(e,C.atk*m,true);break;}
+    case 'smash':for(let h=0;h<P.hits;h++){hitE(front,A*P.mult,P);if(P.splash)alive().slice(1).forEach(e=>hitE(e,A*P.mult*P.splash,null));}
+      fx({x:front.x,y:front.y-.08});if(P.after)RT.pend.push({t:1,mult:P.after,k:'burst',col:'#ff9a3a',leech:0});break;
+    case 'whirl':for(let h=0;h<P.hits;h++){let d=0;alive().forEach(e=>{d+=hitE(e,A*P.mult,P);});if(P.leech)healHero(d*P.leech);}
+      fx({x:HX,y:HY-.02,r:.22});if(P.hits>1)fx({x:HX,y:HY-.02,r:.17,life:.7});break;
+    case 'chain':{const pts=[{x:HX,y:HY-.1}];for(let i=0;i<P.hits;i++){const a=alive();if(!a.length)break;const e=pick(a);pts.push({x:e.x,y:e.y-.08});hitE(e,A*P.mult*(P.lastx2&&i===P.hits-1?2:1),P);}
+      fx({pts});break;}
+    case 'frost':for(let h=0;h<P.hits;h++)alive().forEach(e=>hitE(e,A*P.mult,P));RT.slowT=Math.max(RT.slowT,P.slow);if(P.guard)setGuard(P.guard,4);
+      fx({x:.73,y:.74,r:.3});break;
+    case 'blood':{if(H.hp>C.hp*P.gate)return false;const h=C.hp*P.heal;healHero(h);text(HX,HY-.25,'+'+fmt(h),'#74d083',15);
+      if(P.guard)setGuard(P.guard,5);if(P.regen)RT.regenB={t:5,rate:P.regen};fx({x:HX,y:HY-.08});break;}
+    case 'cry':RT.cry=P.dur;RT.cryV=P.val;RT.cryLeech=P.leech||0;if(P.stun)en.forEach(e=>{e.stun=Math.max(e.stun||0,P.stun);});
+      text(HX,HY-.3,'전투 함성!','#ffb35c',14);fx({x:HX+.03,y:HY-.1});break;
+    case 'execute':{const ord=en.slice().sort((a,b)=>a.hp/a.max-b.hp/b.max);
+      for(const e of ord.slice(0,P.targets)){const m=P.mult*(e.hp/e.max<P.thresh?P.execx:1)*(e.boss?P.bossMult:1);fx({x:e.x,y:e.y-.04});hitE(e,A*m,null);if(P.reset&&e.dead)RT.resetNow=id;}break;}
+    case 'leap':for(let h=0;h<P.hits;h++)alive().forEach(e=>hitE(e,A*P.mult,P));if(P.guard)setGuard(P.guard,3);
+      fx({x:.72,y:.74});fx({x:.72,y:.76,r:.32},'ring');RT.shake=Math.max(RT.shake,.3);break;
+    case 'vamp':{let d=0;(P.targets>1?en:[front]).forEach(e=>{d+=hitE(e,A*P.mult,null);});const h=Math.min(d*P.leech,C.hp*P.cap);healHero(h);
+      if(h>0)text(HX,HY-.25,'+'+fmt(h),'#74d083',13);fx({x:front.x,y:front.y-.04});break;}
+    case 'fire':alive().forEach(e=>hitE(e,A*P.mult,{burn:P.burn,burnT:P.burnT,spread:P.spread}));en.forEach(e=>fx({x:e.x,y:e.y-.06}));break;
+    case 'storm':RT.storm={t:P.dur,tick:P.tick,acc:0,mult:P.mult,col};if(P.guard)setGuard(P.guard,P.dur);fx({x:HX,y:HY-.02,r:.2});break;
+    case 'fissure':{let i=0;for(const e of en){hitE(e,A*P.mult*(1+P.grow*i),P);i++;}fx({x:HX+.04,y:HY+.06,x2:en[en.length-1].x+.04});break;}
+    case 'clone':RT.clones=Array.from({length:P.count},(_,i)=>({t:P.dur,acc:-i*.3,rate:P.rate,mult:P.mult,leech:P.leech||0,i}));fx({x:HX+.07,y:HY-.04,r:.12});break;
+    case 'shield':hitE(front,A*P.mult,null);(P.knockAll?en:[front]).forEach(e=>{if(!e.dead)e.atkT+=P.knock;});setGuard(P.guard,P.guardT,P.refl);
+      fx({x:front.x-.05,y:front.y-.06});RT.shake=Math.max(RT.shake,.15);break;
+    case 'rift':for(let i=0;i<P.count;i++){const d=P.delay+i*.7;RT.pend.push({t:d,mult:P.mult,k:'rift',col,leech:P.leech||0});fx({x:.73,y:.7,life:1,spd:1/d},'riftOpen');}break;
   }
   return true;
 }
-function skillCd(id){let cd=SKMAP[id].cd;if(id==='whirl'&&RT.cs.legs.has('whirl'))cd-=2;return cd*RT.cs.cdMult;}
+// 시간이 걸리는 효과들: 지연 폭발, 칼날 폭풍, 분신, 방어, 재생, 적의 기절·화상
+function tickSkillFx(dt){
+  const C=RT.cs,g=RT.guard;if(g.t>0)g.t-=dt;
+  if(RT.regenB.t>0){RT.regenB.t-=dt;healHero(C.hp*RT.regenB.rate*dt);}
+  for(let i=RT.pend.length-1;i>=0;i--){const p=RT.pend[i];p.t-=dt;if(p.t>0)continue;RT.pend.splice(i,1);
+    let d=0;alive().forEach(e=>{d+=hitE(e,C.atk*p.mult,null);});if(p.leech)healHero(d*p.leech);
+    RT.fx.push({k:p.k,x:.73,y:.7,col:p.col,r:.3,life:1});RT.shake=Math.max(RT.shake,.25);}
+  const st=RT.storm;if(st.t>0){st.t-=dt;st.acc+=dt;while(st.acc>=st.tick){st.acc-=st.tick;const a=alive();if(!a.length)break;a.forEach(e=>hitE(e,C.atk*st.mult,null));
+    if(Math.random()<.5)RT.fx.push({k:'spin',x:HX,y:HY-.02,r:.16,col:st.col,life:.6});}}
+  for(let i=RT.clones.length-1;i>=0;i--){const c=RT.clones[i];c.t-=dt;if(c.t<=0){RT.clones.splice(i,1);continue;}c.acc+=dt;
+    if(c.acc>=c.rate){c.acc-=c.rate;c.anim=.22;const e=alive()[0];if(e){const d=hitE(e,C.atk*c.mult,null);if(c.leech)healHero(d*c.leech);}}if(c.anim>0)c.anim-=dt;}
+  for(const e of RT.enemies){if(e.dead)continue;if(e.stun>0)e.stun-=dt;
+    if(e.burn&&e.burn.t>0){e.burn.t-=dt;e.hp-=e.burn.dps*dt;if(e.hp<=0&&!e.dead)kill(e);}}
+}
+function resetSkillFx(){RT.pend=[];RT.storm={t:0};RT.clones=[];RT.guard={red:0,t:0,refl:0};RT.regenB={t:0,rate:0};RT.wait={};}
 
 function step(dt){
   const C=RT.cs,H=RT.hero;S.stats.time+=dt;sortTick(dt);
@@ -589,6 +796,7 @@ function step(dt){
   if(RT.boss&&alive().length){RT.bossT-=dt;if(RT.bossT<=0){RT.boss=false;RT.enemies=[];S.kills=0;RT.wantBoss=false;log('<span style="color:#ff8b7d">제한 시간 초과 — 보스가 사라졌습니다. 더 강해져서 돌아오세요.</span>');dirty('stage');}}
   if(C.regen>0)H.hp=Math.min(C.hp,H.hp+C.hp*C.regen/100*dt);
   if(RT.cry>0)RT.cry-=dt;if(RT.slowT>0)RT.slowT-=dt;
+  tickSkillFx(dt);if(H.dead>0)return;
   const en=alive();
   if(en.length){
     let as=C.aspd;if(C.legs.has('berserk')&&H.hp<C.hp*0.5)as*=1.5;
@@ -597,19 +805,23 @@ function step(dt){
       if(C.legs.has('flameblade')&&Math.random()<0.2){alive().forEach(x=>dealDmg(x,C.atk*1.5,false));fxRing(e.x,e.y-.08,'#ff8a3d',.16);}
       if(C.blast&&Math.random()<C.blast&&alive().length){alive().forEach(x=>dealDmg(x,C.atk*1.2,false));fxRing(e.x,e.y-.08,'#ff5a2a',.2);RT.shake=Math.max(RT.shake,0.2);}}
   }
-  for(let i=0;i<slotCount();i++){const id=S.slots[i];if(!id)continue;
-    RT.cds[id]=(RT.cds[id]??skillCd(id)*0.4)-dt;
-    if(RT.cds[id]<=0&&alive().length){
-      if(cast(id,S.skills[id])){RT.cds[id]=skillCd(id);if(C.cdReset&&Math.random()<C.cdReset)RT.cds[id]=0.3;
-        if(C.legs.has('echo')&&Math.random()<0.3&&alive().length){cast(id,S.skills[id]);text(HX,HY-.34,'메아리','#ff8a3d',12);}}
-      else RT.cds[id]=0.25;
-    }}
+  for(let i=0;i<slotCount();i++){const id=S.slots[i];if(!id||!S.skills[id])continue;
+    if(RT.cds[id]===undefined)RT.cds[id]=skillCd(id)*0.4;
+    RT.cds[id]-=dt;if(RT.cds[id]>0)continue;RT.cds[id]=0;
+    const en2=alive(),P=skP(id);
+    if(!wantCast(id,P,en2)){RT.wait[id]=(RT.wait[id]||0)+dt;continue;}
+    RT.wait[id]=0;
+    if(cast(id)){RT.cds[id]=skillCd(id);if(C.cdReset&&Math.random()<C.cdReset)RT.cds[id]=0.3;if(RT.resetNow===id){RT.cds[id]=0.3;RT.resetNow=null;}
+      if(C.legs.has('echo')&&Math.random()<0.3&&alive().length){cast(id);text(HX,HY-.34,'메아리','#ff8a3d',12);}}
+    else RT.cds[id]=0.25;
+  }
   const dr=drOf(C.armor,S.stage);
   for(const e of alive()){
     let sp=1;if(RT.slowT>0)sp*=0.6;if(C.legs.has('frostheart'))sp*=0.75;
+    if(e.stun>0)continue;
     e.atkT-=dt*0.8*sp;
-    if(e.atkT<=0){e.atkT+=1;e.anim=0.3;const d=e.atk*R(.9,1.1)*(1-dr)*C.dmgTaken;H.hp-=d;H.hit=0.15;if(e.boss)RT.shake=Math.max(RT.shake,0.25);
-      const rf=(C.legs.has('thorns')?0.6:0)+C.reflect;if(rf>0){e.hp-=d*rf;if(e.hp<=0)kill(e);}
+    if(e.atkT<=0){e.atkT+=1;e.anim=0.3;const d=e.atk*R(.9,1.1)*(1-dr)*C.dmgTaken*(RT.guard.t>0?1-RT.guard.red:1);H.hp-=d;H.hit=0.15;if(e.boss)RT.shake=Math.max(RT.shake,0.25);
+      const rf=(C.legs.has('thorns')?0.6:0)+C.reflect+(RT.guard.t>0?RT.guard.refl:0);if(rf>0){e.hp-=d*rf;if(e.hp<=0)kill(e);}
       if(H.hp<=0){heroDie();return;}}
   }
   RT.enemies=RT.enemies.filter(e=>!e.dead||false);
@@ -874,6 +1086,13 @@ const FXR={
   burst(f,X,Y,t){const i=fr(t,4);lx.fillStyle=f.col;pxStar(X,Y,[3,6,8,9][i],i);lx.fillStyle='#ffe08a';if(i<2)lx.fillRect(X-1,Y-1,3,3);lx.fillStyle=f.col+'99';pxEll(X,Y,[2,5,8,10][i],[1,3,5,6][i]);},
   puff(f,X,Y,t){lx.fillStyle=f.col;const big=f.r>.1;for(let k=0;k<(big?14:8);k++){const a=k/(big?14:8)*6.283+f.r*40,d=t*(big?22:12);
     const s=t<.5&&k%2?2:1;lx.fillRect(Math.round(X+Math.cos(a)*d),Math.round(Y-Math.sin(a)*d*.6-8*t+14*t*t),s,s);}},
+  crack(f,X,Y,t){const i=fr(t,4),x2=Math.round((f.x2||.9)*LW),len=(x2-X)*Math.min(1,(i+1)/2);lx.fillStyle=f.col;let px=X,py=Y;
+    for(let k=4;k<=len;k+=4){const nx=X+k,ny=Y+((k/4)%2?-2:1);pxLine(px,py,nx,ny);if(k%8===0){lx.fillRect(nx,ny-3-i,1,2+i);}px=nx;py=ny;}
+    if(i>=2){lx.fillStyle='#ffe2b0';for(let k=8;k<=len;k+=12)lx.fillRect(X+k,Y-4-i*2,1,2);}},
+  bash(f,X,Y,t){const i=fr(t,3);lx.fillStyle=f.col;for(let k=-6;k<=6;k++)lx.fillRect(X-i,Y+k,2,1);lx.fillRect(X-i-1,Y-7,3,1);lx.fillRect(X-i-1,Y+7,3,1);
+    lx.fillStyle='#ffffff';pxStar(X+2,Y,3+i*2,i);},
+  riftOpen(f,X,Y,t){const r=2+Math.round(t*6),on=Math.floor(tAnim*10)%2;lx.fillStyle='#12001a';pxEllFill(X,Y,r,Math.max(1,Math.round(r*.5)));lx.fillStyle=on?f.col:'#e0c0ff';pxEll(X,Y,r+1,Math.max(1,Math.round(r*.5))+1);},
+  rift(f,X,Y,t){const i=fr(t,4),R2=[4,9,13,15][i];lx.fillStyle=i<2?'#12001a':f.col+'66';pxEllFill(X,Y,Math.round(R2*.6),Math.round(R2*.3));lx.fillStyle=f.col;pxEll(X,Y,R2,R2*.45);lx.fillStyle='#e8d0ff';pxStar(X,Y,[3,7,9,10][i],i);},
   ring(f,X,Y,t){const i=fr(t,4),R=Math.round((f.r||.1)*LW*.5*(i+1)/4);lx.fillStyle=f.col;pxEll(X,Y,R,R*.5);},
 };
 function fxRing(x,y,col,r){RT.fx.push({k:'burst',x,y,col,r,life:1});}
@@ -908,7 +1127,7 @@ function draw(dt){
   for(let i=0;i<np;i++){const sp=.6+(i%5)*.2,x=Math.round((((i*97.3+tAnim*P.vx*sp)/PX%LW)+LW)%LW),y=Math.round((((i*53.7+tAnim*P.vy*sp)/PX%LH)+LH)%LH);
     const a=.35+.35*Math.sin(tAnim*2+i);lx.globalAlpha=a;lx.fillRect(x,y,1,1);if(P.glow){lx.globalAlpha=a*.3;lx.fillRect(x-1,y,3,1);lx.fillRect(x,y-1,1,3);}}
   lx.globalAlpha=1;lx.drawImage(floorCache(ri),0,0);
-  RT.fx=RT.fx.filter(f=>(f.life-=dt*(FXSPD[f.k]||2.4))>0);
+  RT.fx=RT.fx.filter(f=>(f.life-=dt*(f.spd||FXSPD[f.k]||2.4))>0);
   for(const f of RT.fx)if(f.k==='beam'){const x=Math.round(f.x*LW),a=Math.min(1,f.life*1.5),top=Math.round(LH*.1),bot=Math.round(LH*.8);lx.fillStyle=f.col;
     for(let y=top;y<bot;y+=2){lx.globalAlpha=a*.6*(y-top)/(bot-top);lx.fillRect(x-1,y,3,2);}lx.globalAlpha=a*.9;lx.fillRect(x,top+Math.round((1-f.life)*20),1,bot-top);lx.globalAlpha=1;}
   drawHero();
@@ -944,7 +1163,11 @@ function drawHero(){
   const glow=RT.cry>0?'#ffb35c':wp&&wp.leg?'#ff8a3d':wp&&wp.set?SET_COL[wp.set]:null;
   const sp=heroSprite(pose,glow,au?au.col:null,pose==='hurt');
   lx.drawImage(sp.c,X-sp.ax+(pose==='hurt'?-1:0),Y-sp.ay+1);
+  for(const c of RT.clones){const cs=cloneSprite(c.anim>0?'sw1':'idle'+(Math.floor(tAnim*2.5+c.i)%2));lx.globalAlpha=Math.min(1,c.t)*.75;lx.drawImage(cs.c,X+9+c.i*7-cs.ax,Y-cs.ay+1-c.i);lx.globalAlpha=1;}
+  if(RT.guard.t>0){const on=Math.floor(tAnim*6)%2;lx.globalAlpha=.55;lx.fillStyle='#9fd0ff';pxEll(X,Y-12,11+on,14);lx.globalAlpha=1;}
 }
+function cloneSprite(pose){return cached('CL|'+pose,()=>{const hg=heroGrid(HERO_POSES[pose]||HERO_POSES.idle0);const pal={};for(const k in HERO_PAL)pal[k]=css(mixc(rgb(HERO_PAL[k]),[110,60,190],.65));
+  return{c:bake(hg.g,pal,{flat:'e',glow:{chars:'bB',col:'#c08aff'}}),ax:hg.ax,ay:hg.ay};});}
 function drawEnemy(e,ri){
   const boss=e.boss,X=Math.round(e.x*LW),Y=Math.round((e.y+.08)*LH);
   if(e.flash>0)e.flash-=1/60;if(e.anim>0)e.anim-=1/60;
@@ -953,6 +1176,8 @@ function drawEnemy(e,ri){
   lx.fillStyle='rgba(0,0,0,.5)';pxEllFill(X,Y,boss?18:8,boss?3:2);
   const atk=e.anim>0,frame=atk?0:Math.floor(tAnim*2+e.bob)%2,sp=monSprite(ri,boss,frame,e.flash>0,atk);
   const dx=atk?(boss?-4:-2):0;const top=Y-sp.ay+1;lx.drawImage(sp.c,X-Math.round(sp.ax)+dx,top);
+  if(e.stun>0){lx.fillStyle='#ffe066';for(let k=0;k<3;k++){const a=tAnim*5+k*2.09;lx.fillRect(Math.round(X+Math.cos(a)*5),Math.round(top-7+Math.sin(a)*1.5),1,1);}}
+  if(e.burn&&e.burn.t>0){const on=Math.floor(tAnim*8)%2;lx.fillStyle=on?'#ff8a2a':'#ffd060';lx.fillRect(X-3,top+3-on,1,2);lx.fillRect(X+2,top+2+on,1,2);lx.fillStyle='#ff4a1a';lx.fillRect(X,top+1,1,2);}
   const bw=boss?32:14,by=top-4;lx.fillStyle='#000';lx.fillRect(X-bw/2-1,by-1,bw+2,4);lx.fillStyle='#3a0d0a';lx.fillRect(X-bw/2,by,bw,2);
   lx.fillStyle=boss?'#e0503b':'#c0392b';lx.fillRect(X-bw/2,by,Math.round(bw*clamp(e.hp/e.max,0,1)),2);
   return{name:e.name,boss,x:X,y:by-1};
@@ -1016,8 +1241,8 @@ function renderStage(){
   const bb=$('#bossBtn');bb.classList.toggle('hide',!(S.stage>=S.maxStage&&S.kills>=KILLS_PER_STAGE&&!RT.boss));
 }
 function renderSkillbar(){
-  let h='';for(let i=0;i<4;i++){const id=S.slots[i];
-    if(i>=slotCount()){h+=`<div class="sk empty">Lv 20 해금</div>`;continue;}
+  let h='';for(let i=0;i<MAX_SLOTS;i++){const id=S.slots[i];
+    if(i>=slotCount()){h+=`<div class="sk empty">Lv ${i===3?20:40} 해금</div>`;continue;}
     if(!id){h+=`<div class="sk empty">빈 칸</div>`;continue;}
     h+=`<div class="sk" data-sk="${id}"><div class="cd"></div><span class="nm">${SKMAP[id].n}</span><span class="lvl">Lv${S.skills[id]}</span></div>`;}
   $('#skillbar').innerHTML=h;
@@ -1029,9 +1254,10 @@ function tickSkillbar(){
 function renderLog(){const el=$('#log');const atBottom=el.scrollTop+el.clientHeight>=el.scrollHeight-20;el.innerHTML=RT.log.map(l=>`<div>${l}</div>`).join('');if(atBottom)el.scrollTop=el.scrollHeight;}
 function tpLeft(){return S.lvl-1-Object.values(S.tal).reduce((a,b)=>a+b,0);}
 function countUp(){let n=0;if(RT.cs)for(const it of S.inv)if(upgradeScore(it)>1.01)n++;return RT.upCount=n;}
+function brPending(){for(const sk of SKILLS){const L=S.skills[sk.id];if(!L||!sk.br)continue;const ch=S.br[sk.id]||[];for(let t=0;t<sk.br.length;t++)if(L>=BR_LV[t]&&!ch[t])return true;}return false;}
 function renderTabs(){const up=countUp();document.querySelectorAll('#tabs button').forEach(b=>{b.classList.toggle('on',b.dataset.tab===RT.tab);
   if(!b.dataset.label)b.dataset.label=b.textContent.trim();
-  const dot=(b.dataset.tab==='talents'&&tpLeft()>0);
+  const dot=(b.dataset.tab==='talents'&&tpLeft()>0)||(b.dataset.tab==='skills'&&brPending());
   b.innerHTML=b.dataset.label+(dot?'<span class="dot"></span>':'')+(b.dataset.tab==='equip'&&up?`<span class="badge" title="더 좋은 장비">▲${up}</span>`:'');});}
 
 function renderPanel(){
@@ -1061,14 +1287,20 @@ function renderPanel(){
     else{for(const it of shown)h+=cardHTML(it,true);if(!shown.length)h+='<div class="note" style="grid-column:1/-1">해당하는 장비가 없습니다.</div>';}
     h+='</div>';P.innerHTML=h;
   }else if(RT.tab==='skills'){
-    let h=`<h3>스킬 <span class="r">전투 중 자동 시전 · 장착 칸 ${slotCount()}개</span></h3><div class="list">`;
-    for(const sk of SKILLS){const L=S.skills[sk.id];const p=1+0.15*((L||1)-1);
-      if(!L){h+=`<div class="li locked"><div class="t"><b>${sk.n}</b> <small>Lv ${sk.lv}에 습득</small><p>${sk.d(1,1)}</p></div></div>`;continue;}
-      const cost=Math.ceil(40*Math.pow(1.45,L-1));
+    let h=`<h3>스킬 <span class="r">전투 중 자동 시전 · 장착 칸 ${slotCount()}개${slotCount()<MAX_SLOTS?` (Lv ${slotCount()===3?20:40}에 하나 더)`:''}</span></h3><div class="list">`;
+    const order=SKILLS.slice().sort((a,b)=>(S.slots.includes(b.id)-S.slots.includes(a.id))||((!!S.skills[b.id])-(!!S.skills[a.id]))||a.lv-b.lv);
+    for(const sk of order){const L=S.skills[sk.id];const tags=sk.tags.map(t=>`<span class="tag">${TAGN[t]}</span>`).join('');
+      if(!L){h+=`<div class="li locked"><div class="t"><b>${sk.n}</b> <small>Lv ${sk.lv}에 습득</small> ${tags}<p>${sk.d(skP(sk.id))}</p></div></div>`;continue;}
+      const P=skP(sk.id),cost=Math.ceil(40*Math.pow(1.45,L-1));
       let sb='<div class="slotbtns">';for(let i=0;i<slotCount();i++)sb+=`<button data-act="slot" data-i="${i}" data-id="${sk.id}" class="${S.slots[i]===sk.id?'on':''}">${i+1}</button>`;sb+='</div>';
-      h+=`<div class="li"><div class="t"><b>${sk.n}</b> <small class="pips">Lv ${L}</small> <small style="color:var(--dim)">· ${(skillCd(sk.id)).toFixed(1)}초</small><p>${sk.d(p,L)}</p>
-        <div class="row" style="margin:6px 0 0"><button data-act="skup" data-id="${sk.id}" ${S.gold<cost||L>=30?'disabled':''}>강화 <span class="g">●</span> ${fmt(cost)}</button>${sb}</div></div></div>`;}
-    P.innerHTML=h+'</div><p class="note">같은 번호를 다시 누르면 그 칸에서 해제됩니다. 피의 서약은 생명력이 60% 이하일 때만 시전됩니다.</p>';
+      let br='';const ch=S.br[sk.id]||[];
+      (sk.br||[]).forEach((tier,ti)=>{const need=BR_LV[ti];
+        if(L<need){if(ti===0||L>=BR_LV[ti-1])br+=`<div class="brrow lockd">Lv ${need}에 갈래 ${ti+1} 열림 (${tier.map(o=>o.n).join(' / ')})</div>`;return;}
+        const cur=ch[ti];
+        br+=`<div class="brrow"><span class="brlv">갈래 ${ti+1}${cur?'':' <b class="new">선택</b>'}</span><div class="brops">${tier.map(o=>`<button data-act="br" data-id="${sk.id}" data-t="${ti}" data-o="${o.id}" class="bro${cur===o.id?' on':''}" ${cur&&cur!==o.id&&S.stones<brCost(ti)?'disabled':''}><b>${o.n}</b><small>${o.d}</small></button>`).join('')}</div>${cur?`<small class="brc">바꾸기: ◆${brCost(ti)}</small>`:''}</div>`;});
+      h+=`<div class="li sk2"><div class="t"><b>${sk.n}</b> <small class="pips">Lv ${L}</small> <small style="color:var(--dim)">· ${skillCd(sk.id).toFixed(1)}초</small> ${tags}<p>${sk.d(P)}</p>
+        <div class="row" style="margin:6px 0 0"><button data-act="skup" data-id="${sk.id}" ${S.gold<cost||L>=30?'disabled':''}>강화 <span class="g">●</span> ${fmt(cost)}</button>${sb}</div>${br}</div></div>`;}
+    P.innerHTML=h+'</div><p class="note">같은 번호를 다시 누르면 그 칸에서 해제됩니다. 갈래는 스킬 레벨 5·15·30에 열리고, 처음 고를 때는 무료, 바꿀 때는 마력석이 듭니다. 스킬은 알아서 때를 봐서 씁니다(회복은 생명력이 낮을 때, 처형은 약한 적이나 보스에게, 광역은 거의 죽은 적 하나에는 아껴 둠).</p>';
   }else if(RT.tab==='talents'){
     const left=tpLeft();const rc=50*S.lvl;
     let h=`<h3>특성 <span class="r">남은 포인트 <b style="color:#ffe3a6">${left}</b></span></h3><div class="list">`;
@@ -1149,7 +1381,10 @@ function panelAct(act,el){
   else if(act==='bulk'){const r=+el.dataset.r;let n=0,v=0;S.inv=S.inv.filter(it=>{if(it.rarity===r&&!it.lock){n++;v+=salvVal(it);return false;}return true;});S.stones+=v;if(n)toast(`${n}개 분해 · ◆${fmt(v)}`,1);dirty('equip','header');}
   else if(act==='bulkdown'){let n=0,v=0;S.inv=S.inv.filter(it=>{if(!it.lock&&it.rarity<3&&upgradeScore(it)<=1.01){n++;v+=salvVal(it);return false;}return true;});S.stones+=v;if(n)toast(`${n}개 분해 · ◆${fmt(v)} (전설·잠금 제외)`,1);dirty('equip','header');}
   else if(act==='slot'){const i=+el.dataset.i,id=el.dataset.id;if(S.slots[i]===id)S.slots[i]=null;else{S.slots=S.slots.map(x=>x===id?null:x);S.slots[i]=id;}dirty('skills','skillbar');}
-  else if(act==='skup'){const id=el.dataset.id,L=S.skills[id],c=Math.ceil(40*Math.pow(1.45,L-1));if(S.gold>=c&&L<30){S.gold-=c;S.skills[id]++;dirty('skills','header','skillbar');}}
+  else if(act==='br'){const id=el.dataset.id,ti=+el.dataset.t,o=el.dataset.o,ch=S.br[id]||(S.br[id]=[]);
+    if(ch[ti]===o)return;if(ch[ti]){if(S.stones<brCost(ti))return;S.stones-=brCost(ti);}ch[ti]=o;
+    const opt=SKMAP[id].br[ti].find(x=>x.id===o);toast(`${SKMAP[id].n} 갈래: ${opt.n}`,1);dirty('skills','header','skillbar','tabs');}
+  else if(act==='skup'){const id=el.dataset.id,L=S.skills[id],c=Math.ceil(40*Math.pow(1.45,L-1));if(S.gold>=c&&L<30){S.gold-=c;S.skills[id]++;dirty('skills','header','skillbar','tabs');}}
   else if(act==='tal'||act==='tal5'){const T=TALENTS.find(t=>t.id===el.dataset.id);let n=act==='tal5'?5:1;while(n-->0&&tpLeft()>0&&(S.tal[T.id]||0)<T.max)S.tal[T.id]=(S.tal[T.id]||0)+1;recalc();dirty('talents','tabs');}
   else if(act==='talreset'){const c=50*S.lvl;if(S.gold>=c){S.gold-=c;S.tal={};recalc();dirty('talents','tabs','header');}}
   else if(act==='invf'){RT.invF=el.dataset.f;dirty('equip');}
@@ -1231,7 +1466,7 @@ function starterKit(){
   const w=genItem(1,0);w.slot='weapon';w.base='낡은 장검';w.name='낡은 장검';w.imp={atk:6};w.aff=[];S.eq.weapon=w;recalc();RT.hero.hp=RT.cs.hp;
   log('잿빛 심연에 들어섰습니다. 전투는 자동으로 진행됩니다.');
 }
-function afterLoad(){RT.cs=null;RT.enemies=[];RT.boss=false;RT.wantBoss=false;RT.cds={};recalc();RT.hero.hp=RT.cs.hp;dirty('all');}
+function afterLoad(){RT.cs=null;RT.enemies=[];RT.boss=false;RT.wantBoss=false;RT.cds={};resetSkillFx();recalc();RT.hero.hp=RT.cs.hp;dirty('all');}
 
 // ================= 시작 =================
 resize();

@@ -23,6 +23,12 @@
 
 - 그래픽(v0.4.1, 도트): `draw()`가 저해상도 캔버스 `LO`(화면/`PX`=3)에 그리고 키워 붙인다. 스프라이트는 문자열 격자(`HERO_BODY`, `SWORD`, `MON[]`, `DECO`)를 `bake()`로 한 번 구워 `SPRC`에 캐시(테두리·명암 자동). 영웅 동작은 `HERO_POSES`, 적은 `monSprite(지역, 보스, 프레임, 흰색, 공격)`. 이펙트는 `RT.fx`의 `k`로 `FXR[k]`가 그리며, 스킬은 `SKILLS[].fx={t,col}` + `skFx()`. 배경은 `bgCache`·`floorCache`·`vigCache`(지역·크기마다 한 번), `MOBILE`이면 입자 60%.
 
+- 스킬(v0.5): `SKILLS[]`는 `{id,n,lv,cd,tags[],fx,p:{수치},d(P),br:[[갈래…]…],sup?,lvl?}`. 시전 수치는 `skP(id)`가 [기본 `p` → 스킬 레벨(`mult`×(1+0.15×(L−1)), `lvl()`) → 고른 갈래(`S.br[id]=[1단계 id, 2단계 id, 3단계 id]`, 단계는 `BR_LV=[5,15,30]`) → 전설(`RT.cs.legFx`)] 순서로 만든다. 수치 바꾸기는 모두 `{k, add|mul|set}` 한 모양.
+  - **전설 장비가 스킬을 바꾸는 법**: `LEG_FX[전설id]=[{skill:'whirl'|tag:'aoe'|branch:'pull', k:'hits', add:1}, …]`. `calc()`가 장착 전설의 항목을 `c.legFx`로 모으고 `skP()`가 대상 스킬·태그·갈래에 적용한다. 7-2 보조 젬도 같은 모양으로 붙인다.
+  - 시전은 `cast(id)`, 언제 쓸지는 `wantCast(id,P,en)`, 시간 걸리는 효과(지연 폭발 `RT.pend`, 칼날 폭풍 `RT.storm`, 분신 `RT.clones`, 방어 `RT.guard`, 재생 `RT.regenB`, 적 `e.stun`·`e.burn`)는 `tickSkillFx(dt)`. 부가 효과가 붙는 타격은 `hitE(e,피해,P)`(기절·화상·밀침, 실제로 깎은 생명력 반환).
+  - 장착 칸 `slotCount()`: 3 / Lv20 4 / Lv40 5 (`MAX_SLOTS`). 갈래 바꾸기 비용 `brCost(단계)`. 보조 스킬은 `sup:1`.
+  - 화력 비교: `node tools/skill-bench.mjs [스킬 레벨=15] [시드=3]` — 공격 스킬·갈래의 최고/최저가 2배 안쪽이 목표.
+
 ## 시뮬레이션
 - `node tools/sim.mjs [게임 분=30] [시드 수=3]` — `index.html`의 스크립트를 DOM 없이 불러 `step()`을 직접 돌린다. 장비 없음 / 장비 착용(세트 끔) / 세트 착용 세 경우, 같은 레벨 희귀 대비 세트 효과 크기(정적 수치), 전투 측정(같은 부위 희귀와 바꿔 3분 사냥)을 출력한다.
 - 환경변수: `MANAGE=60`(장비 정리 주기, 게임 초), `MODES=none,gear,set`, `NOENH=1`(강화 안 함), `NOTAL=1`(특성·스킬 강화 안 함).
