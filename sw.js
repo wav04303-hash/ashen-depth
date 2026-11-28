@@ -1,4 +1,4 @@
-const C='ashen-v0-4-3';
+const C='ashen-v0-5-0';
 // 버전을 올릴 때마다 위 캐시 이름도 올린다. 이름이 바뀌면 새 서비스 워커가 옛 캐시를 지우고, 다음 실행부터 새 버전이 뜬다.
 const CORE=['./','./index.html','./manifest.webmanifest','./icon-192.png','./icon-512.png','./icon-maskable-512.png','./apple-touch-icon.png'];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(C).then(c=>c.addAll(CORE)));self.skipWaiting()});

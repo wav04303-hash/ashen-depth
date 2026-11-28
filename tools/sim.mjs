@@ -37,7 +37,7 @@ function mulberry32(a) {
   };
 }
 
-const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost'];
+const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost','BR_LV','SKMAP'];
 function boot(seed) {
   Math.random = mulberry32(seed);
   const doc = stub();
@@ -62,6 +62,16 @@ function manage(G, mode) {
       .sort((a, b) => (S.tal[a.id] || 0) - (S.tal[b.id] || 0))[0];
     if (!T) break;
     S.tal[T.id] = (S.tal[T.id] || 0) + 1; left--;
+  }
+  // 스킬 장착: 배운 스킬 중 늦게 열리는 것부터 (보조 스킬은 피의 서약만 마지막 칸에), 갈래는 열리면 차례대로 고름 (v0.5)
+  if (G.BR_LV) {
+    const learned = G.SKILLS.filter(sk => S.skills[sk.id]);
+    const atk = learned.filter(sk => !sk.sup).sort((a, b) => b.lv - a.lv).map(sk => sk.id);
+    const n = G.slotCount(); const pickS = atk.slice(0, n - (S.skills.blood && n >= 4 ? 1 : 0));
+    if (S.skills.blood && n >= 4) pickS.push('blood');
+    S.slots = Array.from({ length: S.slots.length }, (_, i) => pickS[i] || null);
+    for (const sk of learned) { if (!sk.br) continue; const ch = S.br[sk.id] || (S.br[sk.id] = []);
+      sk.br.forEach((t, i) => { if (S.skills[sk.id] >= G.BR_LV[i] && !ch[i]) ch[i] = t[(sk.id.length + i) % t.length].id; }); }
   }
   // 스킬 레벨업: 장착 스킬 중 가장 싼 것
   for (let k = 0; k < (process.env.NOTAL ? 0 : 20); k++) {
