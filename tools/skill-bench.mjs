@@ -9,12 +9,13 @@ function stub(){const f=function(){};return new Proxy(f,{get(t,k){if(k===Symbol.
 function mulberry32(a){return function(){a|=0;a=(a+0x6d2b79f5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return((t^(t>>>14))>>>0)/4294967296;};}
 function boot(seed){Math.random=mulberry32(seed);const ls={getItem:()=>null,setItem(){},removeItem(){}};
   return new Function('document','window','setInterval','setTimeout','requestAnimationFrame','localStorage','navigator',code+
-  ';return {get S(){return S},RT,step,genItem,recalc,mkEnemy,SKILLS,SKMAP,skP,BR_LV,resetSkillFx,GEMS:typeof GEMS!=="undefined"?GEMS:[],gemOk:typeof gemOk!=="undefined"?gemOk:null};')(stub(),stub(),()=>0,()=>0,()=>0,ls,stub());}
-function run(seed,slot,branch,n,low,gem){
+  ';return {get S(){return S},RT,step,genItem,recalc,mkEnemy,SKILLS,SKMAP,skP,BR_LV,resetSkillFx,GEMS:typeof GEMS!=="undefined"?GEMS:[],LEG:typeof LEG!=="undefined"?LEG:{},mkLegItem:typeof mkLegItem!=="undefined"?mkLegItem:null,gemOk:typeof gemOk!=="undefined"?gemOk:null};')(stub(),stub(),()=>0,()=>0,()=>0,ls,stub());}
+function run(seed,slot,branch,n,low,gem,leg,legOff){
   const G=boot(seed),S=G.S,RT=G.RT;S.lvl=60;S.stage=S.maxStage=30;S.autoPush=false;
   for(const sk of G.SKILLS)S.skills[sk.id]=SL;S.br={};if(slot&&branch)S.br[slot]=[branch];
   if(gem&&slot){S.gems=[{u:1,g:gem,r:+(process.env.GEMR||1)}];S.sock={[slot]:[1]};}
   for(const part of ['weapon','helm','chest','gloves','boots','ring','amulet']){let it;for(let k=0;k<500;k++){it=G.genItem(30,2);if(it.slot===part)break;}S.eq[part]=it;}
+  if(leg){const it=G.mkLegItem(leg,30);if(legOff)it.leg=null;S.eq[G.LEG[leg].slot]=it;}
   S.slots=[slot||null,null,null,null,null];G.recalc();RT.hero.hp=RT.cs.hp;G.resetSkillFx();RT.cds={};
   const MAX=1e15;RT.enemies=Array.from({length:n},(_,i)=>{const e=G.mkEnemy('허수아비',MAX,0,false,i,n);e.hp=low?MAX*.25:MAX;return e;});
   const h0=RT.enemies.reduce((a,e)=>a+e.hp,0);
@@ -22,7 +23,7 @@ function run(seed,slot,branch,n,low,gem){
   return {dmg:h0-RT.enemies.reduce((a,e)=>a+Math.max(0,e.hp),0),atk:RT.cs.atk};
 }
 const avg=a=>a.reduce((x,y)=>x+y,0)/a.length;
-function measure(slot,branch,gem){const r={};for(const n of [1,3]){const v=[];for(let s=0;s<SEEDS;s++)for(const low of [false,true])v.push(run(1000+s*7919,slot,branch,n,low,gem).dmg);r[n]=avg(v);}return r;}
+function measure(slot,branch,gem,leg,legOff){const r={};for(const n of [1,3]){const v=[];for(let s=0;s<SEEDS;s++)for(const low of [false,true])v.push(run(1000+s*7919,slot,branch,n,low,gem,leg,legOff).dmg);r[n]=avg(v);}return r;}
 const base=measure(null,null);
 const G0=boot(1);
 console.log(`스킬 레벨 ${SL}, 60초 × 시드 ${SEEDS}개, 평타만 쓸 때 화력 = 1`);
@@ -49,4 +50,21 @@ if (G0.GEMS.length && !process.env.NOGEM) {
   console.log(`  스킬+젬 조합 전체: 최고 ${hi.name} ${hi.v.toFixed(2)} / 최저 ${lo.name} ${lo.v.toFixed(2)} → ${(hi.v/lo.v).toFixed(2)}배`);
   const dm = combos.filter(c => !c.util), hi2 = dm.reduce((a,b)=>b.v>a.v?b:a), lo2 = dm.reduce((a,b)=>b.v<a.v?b:a);
   console.log(`  화력 젬끼리(충격·흡혈·처치 시 폭발 제외): 최고 ${hi2.name} ${hi2.v.toFixed(2)} / 최저 ${lo2.name} ${lo2.v.toFixed(2)} → ${(hi2.v/lo2.v).toFixed(2)}배`);
+}
+
+// 스킬 전용 전설 비교 (v0.6): 전설을 낀 스킬 화력 ÷ 같은 스킬(같은 갈래) 전설 없이. 목표 1.3~1.6배, 전설 낀 공격 스킬끼리 최고/최저 2배 안쪽
+if (G0.mkLegItem && !process.env.NOLEG) {
+  console.log('\n스킬 전용 전설 — 같은 스킬(갈래) 대비 화력 배수 (같은 부위 희귀를 전설로 바꿈)');
+  const val = m => ((m[1]-base[1])/base[1] + (m[3]-base[3])/base[3]) / 2;
+  const legRows = [];
+  for (const k of Object.keys(G0.LEG)) { const L = G0.LEG[k]; if (!L.sk) continue; const sk = G0.SKMAP[L.sk];
+    // 같은 장비(같은 옵션)에서 전설 효과만 켜고 끈 비교
+    const b0 = measure(null, null, null, k, true), w0 = measure(L.sk, L.br || null, null, k, true), w1 = measure(L.sk, L.br || null, null, k, false);
+    const add = (m) => ((m[1]-b0[1])/b0[1] + (m[3]-b0[3])/b0[3]) / 2, without = add(w0), withL = add(w1);
+    const bn = L.br ? '·' + sk.br[0].find(o => o.id === L.br).n : '';
+    legRows.push({ name: `${L.n} (${sk.n}${bn})`, sup: !!sk.sup, r: withL / without, v: withL });
+    console.log(`  ${(L.n + ' — ' + sk.n + bn).padEnd(30, ' ')} ${sk.sup ? '보조 스킬(화력 아님)' : `×${(withL / without).toFixed(2)}  (화력 ${without.toFixed(2)} → ${withL.toFixed(2)})`}`); }
+  const off = legRows.filter(r => !r.sup), hi = off.reduce((a,b)=>b.v>a.v?b:a), lo = off.reduce((a,b)=>b.v<a.v?b:a);
+  console.log(`  전설 낀 공격 스킬끼리: 최고 ${hi.name} ${hi.v.toFixed(2)} / 최저 ${lo.name} ${lo.v.toFixed(2)} → ${(hi.v/lo.v).toFixed(2)}배`);
+  console.log(`  전설 배수 범위: ×${Math.min(...off.map(r=>r.r)).toFixed(2)} ~ ×${Math.max(...off.map(r=>r.r)).toFixed(2)}`);
 }

@@ -149,6 +149,7 @@ select{font:inherit;font-size:12px;color:var(--text);background:var(--panel2);bo
 .aff button{padding:1px 7px;font-size:11px}
 .legbox{margin-top:8px;border:1px solid #6b3a1c;background:#1c0f07;border-radius:7px;padding:7px 9px;font-size:12.5px;color:#ffc59a}
 .legbox b{color:var(--r3)}
+.legbox .legsk{font-size:11px;color:#ffe3a6;background:#3a2210;border-radius:6px;padding:0 5px}
 .cmp{margin-top:10px;font-size:12.5px;background:#100d0b;border:1px solid var(--line);border-radius:7px;padding:7px 9px}
 .cmp div{display:flex;justify-content:space-between}
 .pos{color:var(--green)}.neg{color:#ff8b7d}
@@ -170,7 +171,7 @@ textarea{width:100%;height:80px;background:#0c0a08;color:var(--text);border:1px 
 <body>
 <div id="app">
   <header>
-    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.5.1</div></div>
+    <div class="brand"><h1>잿빛 심연</h1><div class="sub">ASHEN DEPTHS · 자동 전투 파밍 RPG · v0.6.0</div></div>
     <div class="res">
       <div class="lv">Lv <b id="lv">1</b></div>
       <div class="xpbar"><i id="xpf"></i><span id="xpt"></span></div>
@@ -277,10 +278,29 @@ const LEG={
   midas:{n:'미다스의 손',d:'골드 획득 +100%, 처치 시 5% 확률로 아이템 추가 드롭'},
   frostheart:{n:'서리 심장',d:'적의 공격 속도 25% 감소'},
   thorns:{n:'가시 갑주',d:'받은 피해의 60%를 공격자에게 반사'},
-  chain:{n:'폭풍의 사슬',d:'번개 사슬이 2회 더 튐'},
-  whirl:{n:'회오리 칼날',d:'회전베기 피해 +100%, 재사용 대기시간 -2초'},
   critstorm:{n:'칼날 폭풍',d:'치명타 시 모든 스킬 재사용 대기시간 0.2초 감소'},
+  // ---- 스킬 전용 전설 (v0.6): sk=바꾸는 스킬, slot=부위(고정), 이름이 곧 장비 이름. 효과 수치는 LEG_FX ----
+  chain:{n:'폭풍의 사슬',sk:'chain',slot:'amulet',d:'번개 사슬이 1번 더 튀고 피해 +15%'},
+  whirl:{n:'회오리 칼날',sk:'whirl',slot:'weapon',d:'회전베기 한 바퀴 더 (한 바퀴당 75%). 「흡입」 갈래면 기절 2배'},
+  sk_smash:{n:'대지 분쇄자의 건틀릿',sk:'smash',slot:'gloves',d:'강타 피해 +15%, 기절 +0.8초, 나머지 적에게도 피해의 30%'},
+  sk_frost:{n:'영원한 겨울의 왕관',sk:'frost',slot:'helm',d:'서리 고리가 두 번 몰아침 (한 번에 75%), 둔화 +3초'},
+  sk_blood:{n:'순교자의 성배',sk:'blood',slot:'amulet',d:'피의 서약이 70%에서 발동, 회복 +20%p, 5초간 받는 피해 -30%'},
+  sk_cry:{n:'전쟁 군주의 뿔투구',sk:'cry',slot:'helm',d:'전투 함성 피해 증가 +40%p, 지속 +4초'},
+  sk_execute:{n:'망나니의 도끼',sk:'execute',slot:'weapon',d:'처형 피해 +25%, 적을 죽이면 곧바로 다시 사용, 40% 이하부터 2배'},
+  sk_leap:{n:'유성 장화',sk:'leap',slot:'boots',d:'도약 강타가 두 번 내려찍음 (한 번에 75%)'},
+  sk_vamp:{n:'피의 군주 반지',sk:'vamp',slot:'ring',d:'흡혈 일격이 모든 적을 벰(한 명당 75%), 회복 상한 30%'},
+  sk_fire:{n:'불사조 깃털 갑옷',sk:'fire',slot:'chest',d:'화염 폭발 화상 2배, 불탄 적이 죽으면 화상이 옮겨붙음'},
+  sk_storm:{n:'칼날 회오리 갑주',sk:'storm',slot:'chest',d:'칼날 폭풍 지속 +1.5초, 0.4초마다 벰'},
+  sk_fissure:{n:'단층 장화',sk:'fissure',slot:'boots',d:'대지 균열이 두 줄로 갈라짐 (한 줄에 70%), 뒤의 적일수록 +20%p 더'},
+  sk_clone:{n:'쌍둥이 그림자의 반지',sk:'clone',slot:'ring',d:'그림자 분신 +1명 (한 명당 80%)'},
+  sk_shield:{n:'불굴의 방패 장갑',sk:'shield',slot:'gloves',d:'방패 돌진 피해 +30%, 모든 적을 밀침, 받는 피해 감소 +20%p, 방어 중 받은 피해 50% 반사'},
+  sk_rift:{n:'공허 응시자의 목걸이',sk:'rift',slot:'amulet',d:'공허 균열 +1개 (한 개당 80%)'},
+  sk_shock:{n:'감전의 고리',sk:'chain',br:'shock',slot:'ring',d:'번개 사슬 「감전」 갈래: 기절 3배, 피해 +35%'},
+  sk_tworift:{n:'쌍둥이 균열의 장갑',sk:'rift',br:'tworift',slot:'gloves',d:'공허 균열 「이중 균열」 갈래: 균열 +1개'},
 };
+// 전설 고르기: 스킬 전용 전설은 그 스킬을 장착 중이면 2배로 잘 나옴 (스마트 드롭)
+function pickLeg(){const ks=Object.keys(LEG),w=ks.map(k=>LEG[k].sk&&S.slots.includes(LEG[k].sk)?2:1);let r=Math.random()*w.reduce((a,b)=>a+b,0);
+  for(let i=0;i<ks.length;i++){r-=w[i];if(r<0)return ks[i];}return ks[ks.length-1];}
 const SETS={
   guard:{n:'잿불 파수꾼의 갑주',pre:'잿불 파수꾼의',role:'생존',parts:['helm','chest','gloves','boots','amulet'],
     bonus:{2:{d:'생명력 +20%, 방어도 +30%',apply:(t,f)=>{t.hpPct+=20;t.armorPct+=30;}},
@@ -418,7 +438,7 @@ const SKILLS=[
         [{id:'eye',n:'폭풍의 눈',d:'폭풍 동안 받는 피해 -20%',m:[{k:'guard',add:.2}]},
          {id:'afterwind',n:'잔풍',d:'재사용 대기시간 -4초',m:[{k:'cd',add:-4}]}]]},
   {id:'fissure',n:'대지 균열',lv:45,cd:10,tags:['spell','aoe','phys'],fx:{t:'crack',col:'#c89a5a'},
-    p:{mult:2.5,grow:.5,stun:0,burn:0,burnT:3},
+    p:{mult:2.5,grow:.5,stun:0,burn:0,burnT:3,hits:1},
     d:P=>`땅을 갈라 앞에서부터 차례로 공격력 ${pc(P.mult)} 피해, 뒤의 적일수록 +${pc(P.grow)}씩 더 큼${P.stun?`, ${s1(P.stun)}초 기절`:''}${P.burn?`, ${s1(P.burnT)}초간 초당 ${pc(P.burn)} 화상`:''}`,
     br:[[{id:'deepcrack',n:'깊은 균열',d:'피해 +30%',m:[{k:'mult',mul:1.3}]},
          {id:'split',n:'갈라지는 땅',d:'뒤로 갈수록 +40%p 더',m:[{k:'grow',add:.4}]},
@@ -453,8 +473,23 @@ const SKILLS=[
 const SKMAP=Object.fromEntries(SKILLS.map(s=>[s.id,s]));
 // 전설 장비가 스킬을 바꾸는 방법 (지금 있는 전설 2종을 이 방식으로 옮김. 스킬 전용 전설은 여기에 더하면 됨)
 const LEG_FX={
-  chain:[{skill:'chain',k:'hits',add:2}],
-  whirl:[{skill:'whirl',k:'mult',mul:2},{skill:'whirl',k:'cd',add:-2}],
+  chain:[{skill:'chain',k:'hits',add:1},{skill:'chain',k:'mult',mul:1.15},{skill:'chain',k:'fxcol',set:'#c9a0ff'}],
+  whirl:[{skill:'whirl',k:'hits',add:1},{skill:'whirl',k:'mult',mul:.75},{branch:'pull',k:'stun',mul:2},{skill:'whirl',k:'fxcol',set:'#ff7a4a'}],
+  sk_smash:[{skill:'smash',k:'mult',mul:1.15},{skill:'smash',k:'stun',add:.8},{skill:'smash',k:'splash',add:.3},{skill:'smash',k:'fxcol',set:'#ffb040'}],
+  sk_frost:[{skill:'frost',k:'hits',add:1},{skill:'frost',k:'mult',mul:.75},{skill:'frost',k:'slow',add:3},{skill:'frost',k:'fxcol',set:'#e8faff'}],
+  sk_blood:[{skill:'blood',k:'gate',set:.7},{skill:'blood',k:'heal',add:.2},{skill:'blood',k:'guard',add:.3}],
+  sk_cry:[{skill:'cry',k:'val',add:.4},{skill:'cry',k:'dur',add:4}],
+  sk_execute:[{skill:'execute',k:'mult',mul:1.25},{skill:'execute',k:'reset',set:1},{skill:'execute',k:'thresh',set:.4},{skill:'execute',k:'fxcol',set:'#ff3a3a'}],
+  sk_leap:[{skill:'leap',k:'hits',add:1},{skill:'leap',k:'mult',mul:.75},{skill:'leap',k:'fxcol',set:'#ffd060'}],
+  sk_vamp:[{skill:'vamp',k:'targets',set:9},{skill:'vamp',k:'mult',mul:.75},{skill:'vamp',k:'cap',set:.3},{skill:'vamp',k:'fxcol',set:'#ff2a5a'}],
+  sk_fire:[{skill:'fire',k:'burn',mul:2},{skill:'fire',k:'spread',set:1},{skill:'fire',k:'fxcol',set:'#ffd030'}],
+  sk_storm:[{skill:'storm',k:'dur',add:1.5},{skill:'storm',k:'tick',set:.4},{skill:'storm',k:'fxcol',set:'#ffe0a0'}],
+  sk_fissure:[{skill:'fissure',k:'hits',add:1},{skill:'fissure',k:'mult',mul:.7},{skill:'fissure',k:'grow',add:.2},{skill:'fissure',k:'fxcol',set:'#ff9a3a'}],
+  sk_clone:[{skill:'clone',k:'count',add:1},{skill:'clone',k:'mult',mul:.8}],
+  sk_shield:[{skill:'shield',k:'mult',mul:1.3},{skill:'shield',k:'knockAll',set:1},{skill:'shield',k:'guard',add:.2},{skill:'shield',k:'refl',add:.5},{skill:'shield',k:'fxcol',set:'#ffe08a'}],
+  sk_rift:[{skill:'rift',k:'count',add:1},{skill:'rift',k:'mult',mul:.8},{skill:'rift',k:'fxcol',set:'#ff4ad0'}],
+  sk_shock:[{branch:'shock',k:'stun',mul:3},{branch:'shock',k:'mult',mul:1.35}],
+  sk_tworift:[{branch:'tworift',k:'count',add:1}],
 };
 const MAX_SLOTS=5;
 const slotCount=()=>S.lvl>=40?5:S.lvl>=20?4:3;
@@ -540,7 +575,7 @@ function stageName(st){const t=Math.floor((st-1)/60);return `${region(st).n}${t?
 const SAVE_KEY='ashen_depths_v1';
 function newState(){return{
   v:1,lvl:1,xp:0,gold:0,stones:0,stage:1,maxStage:1,kills:0,autoPush:true,
-  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null,null],br:{},gems:[],sock:{},nextGem:1,
+  eq:{},inv:[],nextId:1,tal:{},skills:{smash:1},slots:['smash',null,null,null,null],br:{},gems:[],sock:{},nextGem:1,legSeen:{},
   autoSalv:[true,false,false],speed:1,autoEquip:false,setSeen:{},sort:sortDefault(),
   stats:{kills:0,legends:0,sets:0,deaths:0,bosses:0,time:0,items:0},
   killRate:0,last:Date.now()
@@ -564,6 +599,7 @@ function applySave(o){
   S.sort=Object.assign(sortDefault(),o.sort||{});if(!Array.isArray(S.sort.keep))S.sort.keep=[];S.sort.keep=S.sort.keep.filter(k=>AFF[k]).slice(0,2);
   // v0.3 이전 저장: 지금 가진 세트 조각을 도감에 채워 넣음
   for(const it of [...Object.values(S.eq),...S.inv])if(it&&it.set)markSeen(it);
+  if(!S.legSeen||typeof S.legSeen!=='object')S.legSeen={};for(const it of [...Object.values(S.eq),...S.inv])if(it&&it.leg&&LEG[it.leg])S.legSeen[it.leg]=1;
   while(S.slots.length<MAX_SLOTS)S.slots.push(null);S.slots=S.slots.slice(0,MAX_SLOTS).map(x=>x&&SKMAP[x]?x:null);
   if(!S.br||typeof S.br!=='object')S.br={};
   if(!Array.isArray(S.gems))S.gems=[];if(!S.sock||typeof S.sock!=='object')S.sock={};S.nextGem=Math.max(S.nextGem||1,...S.gems.map(x=>x.u+1),1);
@@ -607,17 +643,20 @@ function rollAff(k,ilvl,rar){const a=AFF[k];const q=R(rar===3?0.5:0,1);
   if(a.flat)return a.base*sc(ilvl)*(0.7+0.6*q);
   return Math.round((a.min+(a.max-a.min)*q)*(1+Math.min(1,ilvl/100))*10)/10;}
 function genItem(ilvl,rar,setId){
-  const slot=setId?SLOTMAP[pick(SETS[setId].parts)]:pick(SLOTS);if(setId)rar=4;
+  const leg=rar===3&&!setId?pickLeg():null;
+  const slot=setId?SLOTMAP[pick(SETS[setId].parts)]:leg&&LEG[leg].slot?SLOTMAP[LEG[leg].slot]:pick(SLOTS);if(setId)rar=4;
   const it={id:S.nextId++,slot:slot.id,base:pick(slot.bases),rarity:rar,ilvl,imp:{},aff:[],leg:null,enh:0,lock:false};
   for(const k in slot.imp)it.imp[k]=slot.imp[k]*sc(ilvl)*R(.85,1.15);
   const n=[0,RI(1,2),RI(3,4),4,4][rar]+(slot.extra?1:0);
   for(const k of shuffle(Object.keys(AFF)).slice(0,n))it.aff.push({k,v:rollAff(k,ilvl,rar)});
-  if(rar===3){it.leg=pick(Object.keys(LEG));S.stats.legends++;}
+  if(rar===3){it.leg=leg||pickLeg();S.stats.legends++;}
   if(setId){it.set=setId;S.stats.sets++;}
-  it.name=rar===0?it.base:rar===1?AFF[it.aff[0].k].pre+' '+it.base:rar===2?pick(RARE_A)+' '+it.base:rar===4?SETS[setId].pre+' '+it.base:LEG[it.leg].n+'의 '+it.base;
+  it.name=rar===0?it.base:rar===1?AFF[it.aff[0].k].pre+' '+it.base:rar===2?pick(RARE_A)+' '+it.base:rar===4?SETS[setId].pre+' '+it.base:LEG[it.leg].sk?LEG[it.leg].n:LEG[it.leg].n+'의 '+it.base;
   S.stats.items++;
   return it;
 }
+// 시험·도구용: 원하는 전설을 그 부위로 만듦
+function mkLegItem(leg,ilvl){let it;for(let i=0;i<400;i++){it=genItem(ilvl,3);if(it.leg===leg)return it;}it.leg=leg;if(LEG[leg].slot)it.slot=LEG[leg].slot;it.name=LEG[leg].n;return it;}
 function rollRarity(boost){
   const m=1+RT.cs.mf/100;const r=Math.random()*100;
   const L=0.7*m*boost,Ra=Math.min(30,6*m*boost),M=Math.min(50,28*Math.sqrt(m)*boost);
@@ -675,11 +714,15 @@ function sortTick(dt){RT.sortT+=dt;if(RT.sortT<30)return;RT.sortT=0;if(S.sort.on
   const A=RT.sortAgg;if(A.n){log(`<span style="color:#9fd8ff">자동 정리: ${A.n}개 분해, 마력석 +${fmt(A.m)}</span>`);A.n=0;A.m=0;}}
 function addLoot(it){
   lootBeam(it);
+  if(it.leg&&LEG[it.leg]&&!S.legSeen[it.leg]){S.legSeen[it.leg]=1;log(`<span class="c3">전설 도감에 새 전설: ${esc(LEG[it.leg].n)}</span>`);}
   let fresh=false;if(it.set){fresh=!(S.setSeen[it.set]&&S.setSeen[it.set][it.slot]);markSeen(it);if(fresh)log(`<span class="c4">세트 도감에 새 조각: ${esc(SETS[it.set].n)} · ${SLOTMAP[it.slot].n}</span>`);}
   if(tryAutoEquip(it))return;
   const why=salvReason(it,{pickup:true,fresh});
   if(why){const v=salvVal(it);S.stones+=v;if(why!=='grade'){RT.sortAgg.n++;RT.sortAgg.m+=v;}dirty('header');return;}
-  if(S.inv.length>=INV_MAX){S.stones+=salvVal(it);log(`가방이 가득 차 <span class="c${it.rarity}">${esc(it.name)}</span> 자동 분해`);dirty('header');return;}
+  if(S.inv.length>=INV_MAX&&it.rarity>=3){ // 가방이 차도 전설·세트는 지키고, 가장 약한 일반~희귀를 대신 분해
+    let vi=-1,vs=1e9;S.inv.forEach((x,i)=>{if(x.rarity<3&&!x.lock){const v=x.rarity*10+upgradeScore(x);if(v<vs){vs=v;vi=i;}}});
+    if(vi>=0){const v=S.inv.splice(vi,1)[0];S.stones+=salvVal(v);}}
+  if(S.inv.length>=INV_MAX&&it.rarity<3){S.stones+=salvVal(it);log(`가방이 가득 차 <span class="c${it.rarity}">${esc(it.name)}</span> 자동 분해`);dirty('header');return;}
   S.inv.push(it);dirty('equip','tabs');
   log(`획득: <span class="c${it.rarity}">${esc(it.name)}</span> <small>(${SLOTMAP[it.slot].n} · ${it.ilvl})</small>`);
   if(it.rarity===3){toast(`전설 획득! 「${esc(it.name)}」`);RT.flash=1;}
@@ -821,7 +864,7 @@ function castInner(id,P){
       if(h>0)text(HX,HY-.25,'+'+fmt(h),'#74d083',13);fx({x:front.x,y:front.y-.04});break;}
     case 'fire':alive().forEach(e=>hitE(e,A*P.mult,{burn:P.burn,burnT:P.burnT,spread:P.spread}));en.forEach(e=>fx({x:e.x,y:e.y-.06}));break;
     case 'storm':RT.storm={t:P.dur,tick:P.tick,acc:0,mult:P.mult,col,P};if(P.guard)setGuard(P.guard,P.dur);fx({x:HX,y:HY-.02,r:.2});break;
-    case 'fissure':{let i=0;for(const e of en){hitE(e,A*P.mult*(1+P.grow*i),P);i++;}fx({x:HX+.04,y:HY+.06,x2:en[en.length-1].x+.04});break;}
+    case 'fissure':{for(let h=0;h<P.hits;h++){let i=0;for(const e of alive()){hitE(e,A*P.mult*(1+P.grow*i),P);i++;}}fx({x:HX+.04,y:HY+.06,x2:en[en.length-1].x+.04});break;}
     case 'clone':RT.clones=Array.from({length:P.count},(_,i)=>({t:P.dur,acc:-i*.3,rate:P.rate,mult:P.mult,leech:P.leech||0,i,P}));fx({x:HX+.07,y:HY-.04,r:.12});break;
     case 'shield':hitE(front,A*P.mult,null);(P.knockAll?en:[front]).forEach(e=>{if(!e.dead)e.atkT+=P.knock;});setGuard(P.guard,P.guardT,P.refl);
       fx({x:front.x-.05,y:front.y-.06});RT.shake=Math.max(RT.shake,.15);break;
@@ -1281,6 +1324,9 @@ function sortBoxHTML(){const R=S.sort;
     <div class="rl"><label><input type="checkbox" data-act="sr" data-k="gemMerge" ${R.gemMerge?'checked':''}> 보조 젬 자동 합성</label><small>안 끼운 같은 젬·등급 3개 → 상위 등급</small></div>
     <p class="note" style="margin:2px 0 0">우선순위: 잠금 &gt; 남기기 옵션 &gt; 도감 새 조각 &gt; 분해 규칙 &gt; 등급별 분해. 가방 정리는 잠금·전설·남기기·세트 첫 조각을 건드리지 않습니다. 「약하면」 비교에는 전설 고유 효과가 들어가지 않습니다.</p>
   </div>`;}
+function legDexHTML(){const ks=Object.keys(LEG);const sk=ks.filter(k=>LEG[k].sk).sort((a,b)=>SKMAP[LEG[a].sk].lv-SKMAP[LEG[b].sk].lv),gen=ks.filter(k=>!LEG[k].sk);
+  const row=k=>{const L=LEG[k],got=S.legSeen[k];return `<div class="dexrow" style="border-left:3px solid ${got?'#ff8a3d':'#3a2f24'}"><b class="${got?'c3':''}" style="${got?'':'color:#6a5d4c'}">${got?'✓ ':''}${L.n}</b> <span class="wh">${L.sk?`「${SKMAP[L.sk].n}」${L.br?' 갈래':''} 전용 · ${SLOTMAP[L.slot].n}`:'일반 전설 · 아무 부위'}</span><div class="wh">${L.d}</div></div>`;};
+  return sk.map(row).join('')+gen.map(row).join('');}
 function dexTotal(){return Object.values(SETS).reduce((a,s)=>a+s.parts.length,0);}
 function dexDone(){let n=0;for(const id in SETS)for(const p of SETS[id].parts)if(S.setSeen[id]&&S.setSeen[id][p])n++;return n;}
 function dexHTML(){return SET_BY_REGION.map(id=>{const SD=SETS[id],seen=S.setSeen[id]||{};const got=SD.parts.filter(p=>seen[p]).length;
@@ -1400,6 +1446,7 @@ function renderPanel(){
       <h3>자동 장착</h3><div class="chk"><label><input type="checkbox" data-act="ae" ${S.autoEquip?'checked':''}> 주운 장비가 지금보다 5% 넘게 강하면 바로 장착</label></div>
       <p class="note" style="margin-top:2px">벗은 장비는 가방으로 갑니다. 세트 효과까지 따져서 비교하지만, 전설 고유 효과는 따지지 않습니다.</p>
       <h3>세트 도감 <span class="r">${dexDone()} / ${dexTotal()} 조각</span></h3><div class="dex">${dexHTML()}</div>
+      <h3>전설 도감 <span class="r">${Object.keys(LEG).filter(k=>S.legSeen[k]).length} / ${Object.keys(LEG).length}</span></h3><p class="note" style="margin-top:0">장착한 스킬의 전용 전설은 두 배로 잘 나와요.</p><div class="dex">${legDexHTML()}</div>
       ${installHTML()}
       <h3>게임 속도</h3><div class="row speed">${[1,2,3].map(s=>`<button data-act="speed" data-s="${s}" class="${S.speed===s?'on':''}">×${s}</button>`).join('')}</div>
       <h3>저장</h3><p class="note" style="margin-top:0">자동 저장은 이 브라우저에만 남습니다. 기기를 옮기거나 백업하려면 코드를 복사해 두세요.</p>
@@ -1429,7 +1476,7 @@ function openItem(id){
     ${Object.keys(it.imp).length?`<div class="imp">${impText(it)}</div>`:''}
     ${it.aff.map((a,i)=>`<div class="aff"><span>${affText(a,it)}</span><button data-act="reroll" data-i="${i}" ${canR?'':'disabled'} title="이 옵션을 무작위로 다시 뽑습니다">재련</button></div>`).join('')||'<div class="note">추가 옵션 없음</div>'}
     ${it.set?setBoxHTML(it.set,C.sets[it.set]||0):''}
-    ${it.leg?`<div class="legbox"><b>${LEG[it.leg].n}</b><br>${LEG[it.leg].d}</div>`:''}
+    ${it.leg?`<div class="legbox"><b>${LEG[it.leg].n}</b>${LEG[it.leg].sk?` <span class="legsk">「${SKMAP[LEG[it.leg].sk].n}」 전용${S.slots.includes(LEG[it.leg].sk)?' · 장착 중':' · 이 스킬을 장착해야 효과'}</span>`:''}<br>${LEG[it.leg].d}</div>`:''}
     ${cmp}
     <div class="mbtns">
       ${f.where==='inv'?`<button class="pri" data-act="equip">장착</button>`:`<button data-act="unequip">해제</button>`}

@@ -37,7 +37,7 @@ function mulberry32(a) {
   };
 }
 
-const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost','BR_LV','SKMAP','GEMS','GEMMAP','gemOk','sockCount','gemAutoMerge','gemUsedBy'];
+const EXPORTS = ['RT','step','calc','recalc','genItem','upgradeScore','setCounts','SETS','SET_RATE','SLOTS','TALENTS','SKILLS','xpNeed','slotCount','sc','stageName','salvVal','enhCost','BR_LV','SKMAP','GEMS','GEMMAP','gemOk','sockCount','gemAutoMerge','gemUsedBy','LEG'];
 function boot(seed) {
   Math.random = mulberry32(seed);
   const doc = stub();
@@ -98,6 +98,10 @@ function manage(G, mode) {
     if (!best) break;
     S.inv.splice(S.inv.indexOf(best), 1); const old = S.eq[best.slot]; S.eq[best.slot] = best; if (old) S.inv.push(old); G.recalc();
   }
+  // 스킬 전용 전설 (v0.6): 장착 스킬의 전용 전설이 가방에 있으면 그 부위에 입힘 (그 부위가 이미 스킬 전설이면 그대로)
+  if (G.LEG) for (const it of S.inv.slice()) { const L = it.leg && G.LEG[it.leg]; if (!L || !L.sk || !S.slots.includes(L.sk)) continue;
+    const cur = S.eq[it.slot]; if (cur && cur.leg && G.LEG[cur.leg] && G.LEG[cur.leg].sk && S.slots.includes(G.LEG[cur.leg].sk)) continue;
+    S.inv.splice(S.inv.indexOf(it), 1); if (cur) S.inv.push(cur); S.eq[it.slot] = it; G.recalc(); }
   // 세트 정책: 가진 세트 조각을 묶어서 입었을 때 더 강하면 통째로 교체
   if (mode === 'set') {
     const score = eq => { const c = G.calc(eq); return c.power * (1 + c.bossDmg / 300) * Math.sqrt(c.ehp); };
